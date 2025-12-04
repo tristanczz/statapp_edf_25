@@ -123,4 +123,5 @@ def graph_dens(data, show_gaussian=True):
     plt.show()
 
 
-graph_dens(jul_obs['tas'])
+#graph_dens(jul_obs['tas'])
+graph_fdr(jul_obs['tas'])
