@@ -1,5 +1,5 @@
-from SBCK import OptimalTransport as OT
 import numpy as np
+from SBCK import CDFT as OT
 
 def correction_OT_multivariee(mod_hist, obs_hist, mod_future):
     """
