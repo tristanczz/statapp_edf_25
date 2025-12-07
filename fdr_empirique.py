@@ -8,7 +8,8 @@ from scipy.stats import gaussian_kde
 
 
 
-# extraction des CSV -- travail avec CMIP5 dans un premier temps (modèle plus simple)
+""" extraction des CSV -- travail avec CMIP5 dans un premier temps (modèle plus simple) """
+
 obs = pd.read_csv("data/obs.csv", sep=';', parse_dates=["date"])
 obs.insert(obs.columns.get_loc('tas') + 1, 'sfcWind', np.sqrt(obs['uas']**2 + obs['vas']**2))  # Ajout de la colonne 'sfcWind' après 'tas'
 modele_hist = pd.read_csv("data/CMIP5_historical.csv", sep=';', parse_dates=["date"])
@@ -17,6 +18,9 @@ modele_fut = pd.read_csv("data/CMIP5_rcp85.csv", sep=';', parse_dates=["date"])
 
 
 
+############################################################################################################
+################################# ECDF et CDF-t ############################################################
+############################################################################################################
 
 
 # fonction de répartition empirique des températures pour un mois donné 
@@ -45,9 +49,46 @@ def fdr(data):
 
 
 
+def cdf_t_correction(modele_hist, observ_hist, modele_fut):
 
-# fonction qui trace la FDR empirique (pour n points donc) et la compare à une loi normale 
-# (avec paramètres mu = moyenne empirique et sigma^2 = variance empirique)
+    """       Ff,r ​=Fp,r​∘Fp,m−1​∘Ff,m​
+#       FDR(obs_futures_estim) = FDR(obs réelles) o FDR(obs_modèle_histor)^-1 o FDR(obs_modèle_futur)
+
+# x_fut = futur modèle
+# x_corr = futur corrigé
+#y_fut = np.interp(x_fut, x_mod_hist, y_mod_hist)   # quantiles du futur
+#x_corr = np.interp(y_fut, y_obs_hist, x_obs_hist)  # remap sur obs """
+    """
+    Correction CDF-t univariée pour une variable climatique.
+
+    Parameters
+    ----------
+    mod_hist : array-like
+        Valeurs historiques du modèle (modèle passé)
+    obs_hist : array-like
+        Valeurs observées historiques
+    mod_fut : array-like
+        Valeurs futures du modèle à corriger
+
+    Returns
+    -------
+    fut_corrige : ndarray
+        Valeurs futures corrigées selon la CDF-t
+    """
+    # 1️ : Fonction de répartition empirique du modèle historique
+    x_mod_hist, ecdf_mod_hist = fdr(modele_hist)
+    # 2️ : Fonction de répartition empirique des observations historiques
+    x_obs_hist, ecdf_obs_hist = fdr(observ_hist)
+    # 3️ : Étape CDF-t : trouver les quantiles du futur modèle dans le modèle historique
+    quantiles_futur = np.interp(modele_fut, x_mod_hist, ecdf_mod_hist)
+    # 4️ : Remapper ces quantiles sur la distribution observée ==> valeurs corrigées : liste température
+    fut_corrige = np.interp(quantiles_futur, ecdf_obs_hist, x_obs_hist)
+    return fut_corrige
+
+
+
+""" fonction qui trace la FDR empirique (pour n points donc) et la compare à une loi normale 
+# (avec paramètres mu = moyenne empirique et sigma^2 = variance empirique)"""
 def graph_fdr(data, show_gaussian=True):
     """
     Trace la FDR empirique des données et, en option, la FDR d'une loi normale
@@ -91,52 +132,33 @@ def graph_fdr_12(data, ax=None, show_gaussian=True, label=None, couleur=None):
     return ax
 
 
+"""graph des FDR pour CDF-t"""
+def graph_fdr_on_ax(data, ax=None, label=None, couleur=None):
+    x, y = fdr(data)
+    if ax is None:
+        ax = plt.gca()
+    ax.plot(x, y, marker='.', linestyle='none', label=label, color=couleur)
+    return ax
 
 
+def plot_cdf_t(modele_hist, observ_hist, modele_fut, fut_corrige):
+    fig, ax = plt.subplots(figsize=(8, 5))
 
+    # 1) Modèle historique
+    graph_fdr_on_ax(modele_hist, ax, label="Modèle historique", couleur="blue")
+    # 2) Observations historiques
+    graph_fdr_on_ax(observ_hist, ax, label="Observations historiques", couleur="green")
+    # 3) Futur modèle (avant correction)
+    graph_fdr_on_ax(modele_fut, ax, label="Modèle futur (brut)", couleur="orange")
+    # 4) Futur corrigé CDF-t
+    graph_fdr_on_ax(fut_corrige, ax, label="Futur corrigé CDF-t", couleur="red")
 
-
-
-#       Ff,r ​=Fp,r​∘Fp,m−1​∘Ff,m​
-#       FDR(obs_futures_estim) = FDR(obs réelles) o FDR(obs_modèle_histor)^-1 o FDR(obs_modèle_futur)
-
-
-# x_fut = futur modèle
-# x_corr = futur corrigé
-#y_fut = np.interp(x_fut, x_mod_hist, y_mod_hist)   # quantiles du futur
-#x_corr = np.interp(y_fut, y_obs_hist, x_obs_hist)  # remap sur obs
-
-def cdf_t_correction(modele_hist, observ_hist, modele_fut):
-    """
-    Correction CDF-t univariée pour une variable climatique.
-
-    Parameters
-    ----------
-    mod_hist : array-like
-        Valeurs historiques du modèle (modèle passé)
-    obs_hist : array-like
-        Valeurs observées historiques
-    mod_fut : array-like
-        Valeurs futures du modèle à corriger
-
-    Returns
-    -------
-    fut_corrige : ndarray
-        Valeurs futures corrigées selon la CDF-t
-    """
-    # 1️ : ECDF du modèle historique
-    x_mod_hist, ecdf_mod_hist = fdr(modele_hist)
-
-    # 2️ : ECDF des observations historiques
-    x_obs_hist, ecdf_obs_hist = fdr(observ_hist)
-
-    # 3️ : Étape CDF-t : trouver les quantiles du futur modèle dans le modèle historique
-    quantiles_futur = np.interp(modele_fut, x_mod_hist, ecdf_mod_hist)
-
-    # 4️ : Remapper ces quantiles sur la distribution observée
-    fut_corrige = np.interp(quantiles_futur, ecdf_obs_hist, x_obs_hist)
-
-    return fut_corrige
+    ax.set_xlabel("Valeurs")
+    ax.set_ylabel("Probabilité cumulée")
+    ax.set_title("Comparaison des ECDF pour la correction CDF-t")
+    ax.grid(True)
+    ax.legend()
+    plt.show()
 
 
 
@@ -151,10 +173,35 @@ def cdf_t_correction(modele_hist, observ_hist, modele_fut):
 
 
 
+############################################################################################################
+################################# MULTIVARIEE ##############################################################
+############################################################################################################
 
 
+"""
+#variables = ['tas', 'sfcWind'] # température et vitesse du vent
+#jul_obs_multi = jul_obs[variables].to_numpy()
+#jul_mod_hist_multi = jul_mod_hist[variables].to_numpy()
+#jul_mod_fut_multi = jul_mod_fut[variables].to_numpy()
+"""
+
+
+
+
+
+
+
+
+
+############################################################################################################
+################################# DENSITES #################################################################
+############################################################################################################
+
+
+
+"""
 #calcule la densité empirique à partir de la moyenne empirique et de la variance empirique
-# sorte d'histogramme mais plus précis avec la KDE (Kernel Density Estimation)
+# sorte d'histogramme mais plus précis avec la KDE (Kernel Density Estimation)"""
 def dens_empirique(data, n_points=10000):
     """
     Retourne la densité empirique (PDF empirique) d'un ensemble de données.
@@ -206,14 +253,3 @@ def graph_dens(data, show_gaussian=True):
 
 #graph_dens(jul_obs['tas'])
 #graph_fdr(jul_obs['tas'])
-
-##############################################################################
-################################# MULTIVARIE #################################
-##############################################################################
-
-
-
-#variables = ['tas', 'sfcWind'] # température et vitesse du vent
-#jul_obs_multi = jul_obs[variables].to_numpy()
-#jul_mod_hist_multi = jul_mod_hist[variables].to_numpy()
-#jul_mod_fut_multi = jul_mod_fut[variables].to_numpy()
