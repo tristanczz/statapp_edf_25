@@ -76,3 +76,15 @@ EUROCORDEX_jul_tas = EUROCORDEX_jul['tas'].values
 """ Graphique CDF-t Juillet """
 """ ici qu'on calcule les FDR empirique des séries """
 #plot_cdf_t(EUROCORDEX_jul_tas, cdft_juillet_hist, cdft_juillet_hist, cdft_juillet_hist)
+
+
+
+
+###### tous les mois ########
+for i in range(1, 13):
+    obs_mois[i] = obs[obs['date'].dt.month == i]
+    modele_hist_mois[i] = modele_hist[modele_hist['date'].dt.month == i]
+    modele_fut_mois[i] = modele_fut[modele_fut['date'].dt.month == i]
+    EUROCORDEX_mois = EUROCORDEX[EUROCORDEX['date'].dt.month == i] 
+    EUROCORDEX_mois_tas = EUROCORDEX_mois['tas'].values
+    plot_cdf_t(EUROCORDEX_mois_tas, cdf_t_correction(modele_hist_mois[i]['tas'], obs_mois[i]['tas'], modele_hist_mois[i]['tas']), cdf_t_correction(modele_hist_mois[i]['tas'], obs_mois[i]['tas'], modele_hist_mois[i]['tas']), cdf_t_correction(modele_hist_mois[i]['tas'], obs_mois[i]['tas'], modele_fut_mois[i]['tas']))
