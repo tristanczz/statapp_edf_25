@@ -127,8 +127,7 @@ def graph_fdr_12(data, ax=None, show_gaussian=True, label=None, couleur=None):
         ax.plot(x_gauss, y_gauss, color='red', linestyle='--', label=f"Gauss N({mu:.2f},{sigma:.2f})")  
     ax.set_xlabel("Valeurs")
     ax.set_ylabel("Probabilité cumulée")
-    ax.grid(True)
-   
+    ax.grid(True)   
     return ax
 
 
@@ -143,15 +142,14 @@ def graph_fdr_on_ax(data, ax=None, label=None, couleur=None):
 
 def plot_cdf_t(modele_hist, observ_hist, modele_fut, fut_corrige):
     fig, ax = plt.subplots(figsize=(8, 5))
-
     # 1) Modèle historique
-    graph_fdr_on_ax(modele_hist, ax, label="Modèle historique", couleur="blue")
+    graph_fdr_on_ax(modele_hist, ax, label="A", couleur="blue")
     # 2) Observations historiques
-    graph_fdr_on_ax(observ_hist, ax, label="Observations historiques", couleur="green")
+    graph_fdr_on_ax(observ_hist, ax, label="B", couleur="green")
     # 3) Futur modèle (avant correction)
-    graph_fdr_on_ax(modele_fut, ax, label="Modèle futur (brut)", couleur="orange")
+    graph_fdr_on_ax(modele_fut, ax, label="C", couleur="orange")
     # 4) Futur corrigé CDF-t
-    graph_fdr_on_ax(fut_corrige, ax, label="Futur corrigé CDF-t", couleur="red")
+    graph_fdr_on_ax(fut_corrige, ax, label="D", couleur="red")
 
     ax.set_xlabel("Valeurs")
     ax.set_ylabel("Probabilité cumulée")
