@@ -86,6 +86,23 @@ def cdf_t_correction(modele_hist, observ_hist, modele_fut):
     return fut_corrige
 
 
+def get_series_for_month(df, var, month):
+    """Retourne la série d'une variable pour un mois donné."""
+    return df[df['date'].dt.month == month][var].values
+
+def corr_hist(mod_hist, obs, month, var):
+    """cdft-t hist"""
+    series_mod_hist = get_series_for_month(mod_hist, var, month)
+    series_obs = get_series_for_month(obs, var, month)
+    return cdf_t_correction(series_mod_hist, series_obs, series_mod_hist)
+
+def corr_fut(mod_hist, obs, mod_fut, month, var):
+    series_mod_hist = get_series_for_month(mod_hist, var, month)
+    series_obs = get_series_for_month(obs, var, month)
+    series_mod_fut = get_series_for_month(mod_fut, var, month)
+    return cdf_t_correction(series_mod_hist, series_obs, series_mod_fut)
+
+
 
 """ fonction qui trace la FDR empirique (pour n points donc) et la compare à une loi normale 
 # (avec paramètres mu = moyenne empirique et sigma^2 = variance empirique)"""
@@ -110,27 +127,6 @@ def graph_fdr(data, show_gaussian=True):
     plt.grid(True)
     plt.show()
 
-
-
-def graph_fdr_12(data, ax=None, show_gaussian=True, label=None, couleur=None):
-    """
-    Trace la FDR empirique sur un axe existant (ax), pour pouvoir superposer plusieurs courbes.
-    """
-    x, y = fdr(data)
-    if ax is None:
-        ax = plt.gca()
-    ax.plot(x, y, marker='.', linestyle='none', label=label, color=couleur)
-    if show_gaussian:
-        mu, sigma = np.mean(data), np.std(data)
-        x_gauss = np.linspace(min(data), max(data), 1000)
-        y_gauss = norm.cdf(x_gauss, loc=mu, scale=sigma)
-        ax.plot(x_gauss, y_gauss, color='red', linestyle='--', label=f"Gauss N({mu:.2f},{sigma:.2f})")  
-    ax.set_xlabel("Valeurs")
-    ax.set_ylabel("Probabilité cumulée")
-    ax.grid(True)   
-    return ax
-
-
 """graph des FDR pour CDF-t"""
 def graph_fdr_on_ax(data, ax=None, label=None, couleur=None):
     x, y = fdr(data)
@@ -139,21 +135,23 @@ def graph_fdr_on_ax(data, ax=None, label=None, couleur=None):
     ax.plot(x, y, marker='.', linestyle='none', label=label, color=couleur)
     return ax
 
-
-def plot_cdf_t(modele_hist, observ_hist, modele_fut, fut_corrige):
-    fig, ax = plt.subplots(figsize=(8, 5))
-    # 1) Modèle historique
-    graph_fdr_on_ax(modele_hist, ax, label="A", couleur="blue")
-    # 2) Observations historiques
-    graph_fdr_on_ax(observ_hist, ax, label="B", couleur="green")
-    # 3) Futur modèle (avant correction)
-    graph_fdr_on_ax(modele_fut, ax, label="C", couleur="orange")
-    # 4) Futur corrigé CDF-t
-    graph_fdr_on_ax(fut_corrige, ax, label="D", couleur="red")
-
-    ax.set_xlabel("Valeurs")
-    ax.set_ylabel("Probabilité cumulée")
-    ax.set_title("Comparaison des ECDF pour la correction CDF-t")
+def plot_cdf_t(euro, mod_hist_corr, obs, fut_corr, var_name='Variable', month=None):
+    """Trace un graphique CDF-t clair avec labels explicites."""
+    fig, ax = plt.subplots(figsize=(8,5))
+    series = {
+        'Eurocordex brut': (euro, 'blue'),
+        'Modèle hist corrigé': (mod_hist_corr, 'green'),
+        'Observations': (obs, 'black'),
+        'Modèle futur corrigé': (fut_corr, 'red')
+    }
+    for label, (data, couleur) in series.items():
+        graph_fdr_on_ax(data, ax=ax, label=label, couleur=couleur)
+    title = f'CDF-t {var_name}'
+    if month:
+        title += f' - Mois {month}'
+    ax.set_title(title)
+    ax.set_xlabel('Valeurs')
+    ax.set_ylabel('Probabilité cumulée')
     ax.grid(True)
     ax.legend()
     plt.show()
