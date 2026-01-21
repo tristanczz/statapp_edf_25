@@ -106,7 +106,7 @@ def plot_distributions_univ(df, nom_modele, mois, var):
     col1, col2 = df.columns[0], df.columns[1]
 
     # Créer deux sous-graphiques
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
 
     # Graphique 1 : Courbes de densité (KDE)
     sns.kdeplot(data=df[col1], label=col1, linewidth=2.5, ax=ax1, color='#e74c3c', alpha=0.7)
@@ -139,3 +139,4 @@ def plot_distributions_univ(df, nom_modele, mois, var):
 
     plt.tight_layout()
     plt.show()
+    plt.close('all')
