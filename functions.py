@@ -140,3 +140,58 @@ def plot_distributions_univ(df, nom_modele, mois, var):
     plt.tight_layout()
     plt.show()
     plt.close('all')
+
+
+def comparer_distributions(df):
+    """
+    Compare les statistiques descriptives de deux distributions.
+
+    Paramètres:
+    -----------
+    df : DataFrame
+        DataFrame contenant deux colonnes à comparer
+
+    Retourne:
+    ---------
+    DataFrame
+        Tableau comparatif des statistiques
+    """
+    # Récupérer les noms des colonnes
+    col1, col2 = df.columns[0], df.columns[1]
+
+    # Calculer les statistiques pour chaque colonne
+    stats = {
+        'Statistique': ['Moyenne', 'Médiane', 'Écart-type', 'Variance',
+                        'Minimum', 'Maximum', 'Q1 (25%)', 'Q3 (75%)',
+                        'Étendue',],
+        col1: [
+            df[col1].mean(),
+            df[col1].median(),
+            df[col1].std(),
+            df[col1].var(),
+            df[col1].min(),
+            df[col1].max(),
+            df[col1].quantile(0.25),
+            df[col1].quantile(0.75),
+            df[col1].max() - df[col1].min(),
+        ],
+        col2: [
+            df[col2].mean(),
+            df[col2].median(),
+            df[col2].std(),
+            df[col2].var(),
+            df[col2].min(),
+            df[col2].max(),
+            df[col2].quantile(0.25),
+            df[col2].quantile(0.75),
+            df[col2].max() - df[col2].min(),
+        ]
+    }
+
+    # Créer le DataFrame de comparaison
+    df_stats = pd.DataFrame(stats)
+
+    # Arrondir les valeurs
+    df_stats = df_stats.round(3)
+
+    return df_stats
