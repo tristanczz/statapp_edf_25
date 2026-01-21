@@ -3,6 +3,7 @@ import numpy as np
 from statsmodels.distributions.empirical_distribution import ECDF
 import matplotlib.pyplot as plt
 import seaborn as sns
+from scipy.stats import norm
 
 
 def csv_to_pd_univ(filepath, mois, var):
@@ -195,3 +196,85 @@ def comparer_distributions(df):
     df_stats = df_stats.round(3)
 
     return df_stats
+
+
+def cdf_t_univ_norm(modele_hist, obs_hist, modele_futur):
+
+    # Extraire les valeurs des colonnes
+    m_hist = modele_hist.iloc[:, 0].values
+    o_hist = obs_hist.iloc[:, 0].values
+    m_futur = modele_futur.iloc[:, 0].values
+
+    # Estimation des paramètres des gaussiennes par maximum de vraisemblance
+    mu_obs_hist, sigma_obs_hist = norm.fit(o_hist)
+    mu_model_hist, sigma_model_hist = norm.fit(m_hist)
+    mu_model_fut, sigma_model_fut = norm.fit(m_futur)
+
+    # Calcul du paramètre de la loi (normale) des observations futures
+    mu_obs_fut = mu_model_fut + (mu_obs_hist-mu_model_hist)*(sigma_model_fut/sigma_model_hist)
+    sigma_obs_fut = sigma_obs_hist*(sigma_model_fut/sigma_model_hist)
+
+    return [(mu_model_fut, sigma_model_fut), (mu_obs_fut, sigma_obs_fut)]
+
+
+def plot_distributions_univ_norm(norm_model, norm_obs, nom_modele, mois, var):
+    """
+    Trace deux distributions normales avec leurs paramètres.
+
+    Paramètres:
+    -----------
+    norm_model : tuple (mean, std)
+        Paramètres de la loi normale du modèle (moyenne, écart-type)
+    norm_obs : tuple (mean, std)
+        Paramètres de la loi normale observée (moyenne, écart-type)
+    nom_modele : str
+        Nom du modèle
+    var : str
+        Nom de la variable
+    mois : int
+        Numéro du mois (1-12)
+    """
+    # Noms des mois
+    mois_noms = {
+        1: "Janvier", 2: "Février", 3: "Mars", 4: "Avril",
+        5: "Mai", 6: "Juin", 7: "Juillet", 8: "Août",
+        9: "Septembre", 10: "Octobre", 11: "Novembre", 12: "Décembre"
+    }
+
+    # Décomposer les paramètres
+    mean_model, std_model = norm_model
+    mean_obs, std_obs = norm_obs
+
+    # Créer une plage de valeurs pour tracer les courbes
+    x_min = min(mean_model - 4*std_model, mean_obs - 4*std_obs)
+    x_max = max(mean_model + 4*std_model, mean_obs + 4*std_obs)
+    x = np.linspace(x_min, x_max, 1000)
+
+    # Calculer les densités
+    y_model = norm.pdf(x, mean_model, std_model)
+    y_obs = norm.pdf(x, mean_obs, std_obs)
+
+    # Configurer le style
+    sns.set_style("whitegrid")
+    plt.figure(figsize=(10, 6))
+
+    # Tracer les courbes
+    plt.plot(x, y_model, linewidth=2.5, color='#e74c3c', alpha=0.8,
+             label=f'Modèle: μ={mean_model:.2f}, σ={std_model:.2f}')
+    plt.plot(x, y_obs, linewidth=2.5, color='#3498db', alpha=0.8,
+             label=f'Corrigé: μ={mean_obs:.2f}, σ={std_obs:.2f}')
+
+    # Ajouter des zones ombrées sous les courbes
+    plt.fill_between(x, y_model, alpha=0.2, color='#e74c3c')
+    plt.fill_between(x, y_obs, alpha=0.2, color='#3498db')
+
+    # Labels et titre
+    plt.xlabel('Valeur', fontsize=12)
+    plt.ylabel('Densité de probabilité', fontsize=12)
+    plt.title(f'Correction du modèle {nom_modele} pour {var} et {mois_noms[mois]}', 
+              fontsize=14, fontweight='bold')
+    plt.legend(fontsize=11, loc='best')
+    plt.grid(alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
