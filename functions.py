@@ -127,12 +127,15 @@ def plot_distributions_univ(df, nom_modele, mois, var):
     ax2.grid(alpha=0.3, axis='y')
 
     # Dictionnaire des mois pour le titre
-    dic_mois = {1 : "janvier", 2 : "février", 3 : "mars", 4 : "avril", 5 : "mai", 6 : "juin", 
-    7 : "juillet", 8: "août", 9 : "septembre", 10 : "octobre", 11 : "novembre", 12 : "décembre"}
+    dic_mois = {1: "janvier", 2: "février", 3: "mars", 4: "avril", 5: "mai", 6: "juin",
+                7: "juillet", 8: "août", 9: "septembre", 10: "octobre",
+                11: "novembre", 12: "décembre"}
 
     # Titre général
-    fig.suptitle(f"Correction du modèle {nom_modele} pour {var} et {dic_mois[mois]}", fontsize=14, 
-    fontweight='bold', y=1.02)
+    fig.suptitle(
+        f"Correction du modèle {nom_modele} pour {var} et {dic_mois[mois]}", fontsize=14,
+        fontweight='bold', y=1.02
+    )
 
     plt.tight_layout()
     plt.show()
