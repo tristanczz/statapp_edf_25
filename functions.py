@@ -6,10 +6,11 @@ import seaborn as sns
 from scipy.stats import norm
 
 
-def csv_to_pd_univ(filepath, mois, var):
+def csv_to_pd_univ(filepath, mois, var, years=None):
     """
     Charge un CSV à partir d'un chemin donné,
-    filtre pour ne garder que les valeurs de la variable 'var' pour le mois indiqué.
+    filtre pour ne garder que les valeurs de la variable 'var' pour le mois indiqué
+    et optionnellement pour une période d'années.
 
     Paramètres
     ----------
@@ -19,17 +20,33 @@ def csv_to_pd_univ(filepath, mois, var):
         Mois à sélectionner (1=Janvier, 12=Décembre)
     var : str
         Nom de la variable à conserver
+    years : tuple, optional
+        Tuple (année_début, année_fin) pour filtrer la période
+        Ex: (1985, 2005) pour extraire les données de 1985 à 2005 inclus
 
     Retour
     ------
     pd.DataFrame
-        DataFrame contenant uniquement la colonne 'var' filtrée sur le mois demandé.
+        DataFrame contenant uniquement la colonne 'var' filtrée sur le mois et la période demandés.
     """
+    if years is not None and (not isinstance(years, tuple) or len(years) != 2):
+        raise ValueError(f"years doit être un tuple de 2 éléments (année_début, année_fin)")
+    
     # Lire le CSV avec ; et parser la colonne date
     df = pd.read_csv(filepath, sep=';', parse_dates=['date'])
 
     # Filtrer sur le mois
     df = df[df['date'].dt.month == mois]
+    
+    # Filtrer sur la période d'années si spécifié
+    if years is not None:
+        year_start, year_end = years
+        df = df[(df['date'].dt.year >= year_start) & (df['date'].dt.year <= year_end)]
+    
+    # Vérifier qu'il reste des données
+    if len(df) == 0:
+        period_str = f" pour la période {years[0]}-{years[1]}" if years else ""
+        raise ValueError(f"Aucune donnée trouvée pour le mois {mois} et la variable {var}{period_str}")
 
     # Ne garder que la colonne var
     df_final = df[[var]].copy()
@@ -278,3 +295,63 @@ def plot_distributions_univ_norm(norm_model, norm_obs, nom_modele, mois, var):
 
     plt.tight_layout()
     plt.show()
+
+
+def extract_month_data(csv_path, month, columns=None, years=None):
+    """
+    Extrait les données d'un mois spécifique d'un fichier CSV pour une période donnée.
+    
+    Parameters:
+    -----------
+    csv_path : str
+        Chemin vers le fichier CSV (séparateur ';')
+    month : int
+        Numéro du mois à extraire (1-12)
+    columns : list, optional
+        Liste des colonnes à extraire (dans l'ordre souhaité)
+    years : tuple, optional
+        Tuple (année_début, année_fin) pour filtrer la période
+        Ex: (1985, 2005) pour extraire les données de 1985 à 2005 inclus
+    
+    Returns:
+    --------
+    numpy.ndarray
+        Array de shape (n_samples, n_variables) avec les données du mois et de la période
+    """
+    if not 1 <= month <= 12:
+        raise ValueError(f"Le mois doit être entre 1 et 12, reçu: {month}")
+    
+    if years is not None and (not isinstance(years, tuple) or len(years) != 2):
+        raise ValueError(f"years doit être un tuple de 2 éléments (année_début, année_fin)")
+    
+    df = pd.read_csv(csv_path, sep=';')
+    date_col = df.columns[0]
+    
+    # Conversion flexible pour gérer différents formats de date
+    df[date_col] = pd.to_datetime(df[date_col])
+    
+    # Filtrer par mois
+    df_filtered = df[df[date_col].dt.month == month]
+    
+    # Filtrer par période d'années si spécifié
+    if years is not None:
+        year_start, year_end = years
+        df_filtered = df_filtered[
+            (df_filtered[date_col].dt.year >= year_start) & 
+            (df_filtered[date_col].dt.year <= year_end)
+        ]
+    
+    if len(df_filtered) == 0:
+        period_str = f" pour la période {years[0]}-{years[1]}" if years else ""
+        raise ValueError(f"Aucune donnée trouvée pour le mois {month}{period_str}")
+    
+    # Si des colonnes spécifiques sont demandées
+    if columns is not None:
+        data = df_filtered[columns].values
+    else:
+        data = df_filtered.iloc[:, 1:].values
+    
+    period_info = f" ({years[0]}-{years[1]})" if years else ""
+    print(f"Données extraites de {csv_path}: {len(data)} lignes, {data.shape[1]} variables pour le mois {month}{period_info}")
+    
+    return data
