@@ -5,10 +5,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-def csv_to_pd_univ(filepath, mois, var, years=None):
+def csv_to_pd(filepath, mois, var, years=None):
     """
     Charge un CSV à partir d'un chemin donné,
-    filtre pour ne garder que les valeurs de la variable 'var' pour le mois indiqué
+    filtre pour ne garder que les valeurs des variables dans var pour le mois indiqué
     et optionnellement pour une période d'années.
 
     Paramètres
@@ -17,8 +17,8 @@ def csv_to_pd_univ(filepath, mois, var, years=None):
         Chemin complet vers le fichier CSV (ex: '/home/onyxia/work/statapp_edf_25/data/obs.csv')
     mois : int
         Mois à sélectionner (1=Janvier, 12=Décembre)
-    var : str
-        Nom de la variable à conserver
+    var : list
+        Liste des noms des variables à conserver
     years : tuple, optional
         Tuple (année_début, année_fin) pour filtrer la période
         Ex: (1985, 2005) pour extraire les données de 1985 à 2005 inclus
@@ -26,7 +26,7 @@ def csv_to_pd_univ(filepath, mois, var, years=None):
     Retour
     ------
     pd.DataFrame
-        DataFrame contenant uniquement la colonne 'var' filtrée sur le mois et la période demandés.
+        DataFrame contenant uniquement les colonnes 'var' filtrées sur le mois et la période demandés.
     """
     if years is not None and (not isinstance(years, tuple) or len(years) != 2):
         raise ValueError(f"years doit être un tuple de 2 éléments (année_début, année_fin)")
@@ -47,8 +47,9 @@ def csv_to_pd_univ(filepath, mois, var, years=None):
         period_str = f" pour la période {years[0]}-{years[1]}" if years else ""
         raise ValueError(f"Aucune donnée trouvée pour le mois {mois} et la variable {var}{period_str}")
 
-    # Ne garder que la colonne var
-    df_final = df[[var]].copy()
+    # Ne garder que les variables dans var 
+
+    df_final = df[var].copy()
 
     return df_final
 
