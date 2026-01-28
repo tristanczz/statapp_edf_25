@@ -79,20 +79,19 @@ def cdf_t_univ(modele_hist, obs_hist, modele_futur):
 
     # Calculer les fonctions de répartition empiriques (ECDF)
     ecdf_modele_futur = ECDF(m_futur)
-    ecdf_obs_hist = ECDF(o_hist)
+    ecdf_modele_hist = ECDF(m_hist)
 
-    # Vectorisation : appliquer les transformations sur tout le vecteur
-    # Étape 1: ecdf_modele_futur pour toutes les valeurs futures
+    # Étape 1:
     p_futur = ecdf_modele_futur(m_futur)
 
-    # Étape 2: ecdf_modele_hist^-1 = quantiles de modele_hist
-    val_hist = np.quantile(m_hist, p_futur)
+    # Étape 2:
+    val_hist = np.quantile(o_hist, p_futur)
 
-    # Étape 3: ecdf_obs_hist sur toutes les valeurs historiques correspondantes
-    p_obs = ecdf_obs_hist(val_hist)
+    # Étape 3:
+    p_obs = ecdf_modele_hist(val_hist)
 
-    # Étape 4: Inverser = quantiles de obs_hist
-    obs_futur_corrige = np.quantile(o_hist, p_obs)
+    # Étape 4:
+    obs_futur_corrige = np.quantile(m_futur, p_obs)
 
     # Retourner un DataFrame avec deux colonnes
     return pd.DataFrame({
