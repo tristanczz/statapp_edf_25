@@ -3,7 +3,6 @@ import numpy as np
 from statsmodels.distributions.empirical_distribution import ECDF
 import matplotlib.pyplot as plt
 import seaborn as sns
-from scipy.stats import norm
 
 
 def csv_to_pd_univ(filepath, mois, var, years=None):
@@ -94,22 +93,22 @@ def cdf_t_univ(modele_hist, obs_hist, modele_futur):
     obs_futur_corrige = np.quantile(m_futur, p_obs)
 
     # Retourner un DataFrame avec deux colonnes
-    return pd.DataFrame({
-        'valeurs_modele': m_futur,
-        'valeurs_corrigees': obs_futur_corrige
-    }, index=modele_futur.index)
+    return (
+        pd.DataFrame({'valeurs_modele': m_futur}, index=modele_futur.index),
+        pd.DataFrame({'valeurs_corrigees': obs_futur_corrige}, index=modele_futur.index)
+    )
 
 
-def plot_distributions_univ(df, nom_modele, mois, var):
+def plot_distributions(dfs_tuple, titre, labels_tuple):
     """
-    Trace les distributions de deux colonnes d'un DataFrame en les superposant.
+    Trace les distributions de deux DataFrames en les superposant.
+    Histogrammes et courbes de densité sont combinés sur le même graphique.
 
     Paramètres:
     -----------
-    df : DataFrame
-        DataFrame contenant deux colonnes à comparer
-    nom_modele : str
-        Nom du modèle pour le titre
+    dfs_tuple : tuple(DataFrame, DataFrame)
+        Tuple contenant deux DataFrames (futur, passé) avec une seule colonne chacun
+    titre : str
 
     Retourne:
     ---------
@@ -117,41 +116,43 @@ def plot_distributions_univ(df, nom_modele, mois, var):
     """
     # Configurer le style
     sns.set_style("whitegrid")
-    plt.figure(figsize=(12, 6))
+    
+    # Extraire les deux DataFrames du tuple
+    df1, df2 = dfs_tuple
+    
+    # Récupérer les données
+    col1, col2 = df1.columns[0], df2.columns[0]
+    data1 = df1[col1]
+    data2 = df2[col2]
 
-    # Récupérer les noms des colonnes
-    col1, col2 = df.columns[0], df.columns[1]
+    #Récupérer les labels
+    label1, label2 = labels_tuple
 
-    # Créer deux sous-graphiques
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
+    # Créer la figure
+    fig, ax = plt.subplots(figsize=(12, 6))
 
-    # Graphique 1 : Courbes de densité (KDE)
-    sns.kdeplot(data=df[col1], label=col1, linewidth=2.5, ax=ax1, color='#e74c3c', alpha=0.7)
-    sns.kdeplot(data=df[col2], label=col2, linewidth=2.5, ax=ax1, color='#3498db', alpha=0.7)
-    ax1.set_xlabel('Valeur', fontsize=11)
-    ax1.set_ylabel('Densité', fontsize=11)
-    ax1.set_title('Distributions (courbes de densité)', fontsize=12, fontweight='bold')
-    ax1.legend(fontsize=10)
-    ax1.grid(alpha=0.3)
+    # Histogrammes superposés
+    ax.hist(data1, bins=30, alpha=0.4, label=f' {label1} (histogramme)', 
+            color='#e74c3c', density=True, edgecolor='black', linewidth=0.5)
+    ax.hist(data2, bins=30, alpha=0.4, label=f'{label2} (histogramme)', 
+            color='#3498db', density=True, edgecolor='black', linewidth=0.5)
 
-    # Graphique 2 : Histogrammes superposés
-    ax2.hist(df[col1], bins=30, alpha=0.5, label=col1, color='#e74c3c', density=True, edgecolor='black')  # noqa: E501
-    ax2.hist(df[col2], bins=30, alpha=0.5, label=col2, color='#3498db', density=True, edgecolor='black')  # noqa: E501
-    ax2.set_xlabel('Valeur', fontsize=11)
-    ax2.set_ylabel('Densité', fontsize=11)
-    ax2.set_title('Distributions (histogrammes)', fontsize=12, fontweight='bold')
-    ax2.legend(fontsize=10)
-    ax2.grid(alpha=0.3, axis='y')
+    # Courbes de densité par-dessus
+    sns.kdeplot(data=data1, label=f' {label1} (densité)', linewidth=2.5, 
+                ax=ax, color='#c0392b', alpha=0.9)
+    sns.kdeplot(data=data2, label=f'{label2} (densité)', linewidth=2.5, 
+                ax=ax, color='#2980b9', alpha=0.9)
 
-    # Dictionnaire des mois pour le titre
-    dic_mois = {1: "janvier", 2: "février", 3: "mars", 4: "avril", 5: "mai", 6: "juin",
-                7: "juillet", 8: "août", 9: "septembre", 10: "octobre",
-                11: "novembre", 12: "décembre"}
+    # Labels et titre
+    ax.set_xlabel('Valeur', fontsize=12)
+    ax.set_ylabel('Densité', fontsize=12)
+    ax.legend(fontsize=10, loc='best')
+    ax.grid(alpha=0.3, axis='y')
 
     # Titre général
-    fig.suptitle(
-        f"Correction du modèle {nom_modele} pour {var} et {dic_mois[mois]}", fontsize=14,
-        fontweight='bold', y=1.02
+    ax.set_title(
+        titre, 
+        fontsize=14, fontweight='bold', pad=15
     )
 
     plt.tight_layout()
@@ -159,14 +160,14 @@ def plot_distributions_univ(df, nom_modele, mois, var):
     plt.close('all')
 
 
-def comparer_distributions(df):
+def comparer_distributions(dfs_tuple):
     """
     Compare les statistiques descriptives de deux distributions.
 
     Paramètres:
     -----------
-    df : DataFrame
-        DataFrame contenant deux colonnes à comparer
+    dfs_tuple : DataFrames
+        Tuple contenant deux DataFrames avec une seule colonne chacun
 
     Retourne:
     ---------
@@ -174,7 +175,8 @@ def comparer_distributions(df):
         Tableau comparatif des statistiques
     """
     # Récupérer les noms des colonnes
-    col1, col2 = df.columns[0], df.columns[1]
+    df1, df2 = dfs_tuple
+    col1, col2 = df1.columns[0], df2.columns[0]
 
     # Calculer les statistiques pour chaque colonne
     stats = {
@@ -182,26 +184,26 @@ def comparer_distributions(df):
                         'Minimum', 'Maximum', 'Q1 (25%)', 'Q3 (75%)',
                         'Étendue',],
         col1: [
-            df[col1].mean(),
-            df[col1].median(),
-            df[col1].std(),
-            df[col1].var(),
-            df[col1].min(),
-            df[col1].max(),
-            df[col1].quantile(0.25),
-            df[col1].quantile(0.75),
-            df[col1].max() - df[col1].min(),
+            df1[col1].mean(),
+            df1[col1].median(),
+            df1[col1].std(),
+            df1[col1].var(),
+            df1[col1].min(),
+            df1[col1].max(),
+            df1[col1].quantile(0.25),
+            df1[col1].quantile(0.75),
+            df1[col1].max() - df1[col1].min(),
         ],
         col2: [
-            df[col2].mean(),
-            df[col2].median(),
-            df[col2].std(),
-            df[col2].var(),
-            df[col2].min(),
-            df[col2].max(),
-            df[col2].quantile(0.25),
-            df[col2].quantile(0.75),
-            df[col2].max() - df[col2].min(),
+            df2[col2].mean(),
+            df2[col2].median(),
+            df2[col2].std(),
+            df2[col2].var(),
+            df2[col2].min(),
+            df2[col2].max(),
+            df2[col2].quantile(0.25),
+            df2[col2].quantile(0.75),
+            df2[col2].max() - df2[col2].min(),
         ]
     }
 
@@ -212,25 +214,6 @@ def comparer_distributions(df):
     df_stats = df_stats.round(3)
 
     return df_stats
-
-
-def cdf_t_univ_norm(modele_hist, obs_hist, modele_futur):
-
-    # Extraire les valeurs des colonnes
-    m_hist = modele_hist.iloc[:, 0].values
-    o_hist = obs_hist.iloc[:, 0].values
-    m_futur = modele_futur.iloc[:, 0].values
-
-    # Estimation des paramètres des gaussiennes par maximum de vraisemblance
-    mu_obs_hist, sigma_obs_hist = norm.fit(o_hist)
-    mu_model_hist, sigma_model_hist = norm.fit(m_hist)
-    mu_model_fut, sigma_model_fut = norm.fit(m_futur)
-
-    # Calcul du paramètre de la loi (normale) des observations futures
-    mu_obs_fut = mu_model_fut + (mu_obs_hist-mu_model_hist)*(sigma_model_fut/sigma_model_hist)
-    sigma_obs_fut = sigma_obs_hist*(sigma_model_fut/sigma_model_hist)
-
-    return [(mu_model_fut, sigma_model_fut), (mu_obs_fut, sigma_obs_fut)]
 
 
 def plot_distributions_univ_norm(norm_model, norm_obs, nom_modele, mois, var):
