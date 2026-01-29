@@ -73,31 +73,33 @@ def cdf_t_univ(modele_hist, obs_hist, modele_futur):
         DataFrame avec deux colonnes : 'valeurs_modele' et 'valeurs_corrigees'
     """
     # Extraire les valeurs des colonnes
-    m_hist = modele_hist.iloc[:, 0].values
-    o_hist = obs_hist.iloc[:, 0].values
-    m_futur = modele_futur.iloc[:, 0].values
+    m_hist = modele_hist.squeeze().to_numpy()
+    o_hist = obs_hist.squeeze().to_numpy()
+    m_futur = modele_futur.squeeze().to_numpy()
 
-    # Calculer les fonctions de répartition empiriques (ECDF)
-    ecdf_modele_futur = ECDF(m_futur)
-    ecdf_modele_hist = ECDF(m_hist)
+    # Fonctions de répartition empiriques 
+    ecdf_modele_futur = ECDF(m_futur) #F_X1
+    ecdf_modele_hist = ECDF(m_hist) # F_X0
 
-    # Étape 1:
-    p_futur = ecdf_modele_futur(m_futur)
+    
+    #Quantile mapping en supposant que la relation entre observation et modèle est inchangée dans le temps : 
+    q_futur = ecdf_modele_futur(m_futur) # F_X1(X1)
 
-    # Étape 2:
-    val_hist = np.quantile(o_hist, p_futur)
+    b = np.quantile(o_hist, q_futur) #F_Y0^{-1}(F_X1(X1))
 
-    # Étape 3:
-    p_obs = ecdf_modele_hist(val_hist)
+    c = ecdf_modele_hist(b) #F_X0(b)
 
-    # Étape 4:
-    obs_futur_corrige = np.quantile(m_futur, p_obs)
+    modele_non_biaise = np.quantile(m_futur, c) #F_Y1^{-1}(c)
 
-    # Retourner un DataFrame avec deux colonnes
-    return (
-        pd.DataFrame({'valeurs_modele': m_futur}, index=modele_futur.index),
-        pd.DataFrame({'valeurs_corrigees': obs_futur_corrige}, index=modele_futur.index)
-    )
+    # ECDF du modele non biaisé
+    def ecdf_non_biaise(x):
+        
+        p = ecdf_modele_futur(x)
+        b = np.quantile(m_hist, p)
+        return ECDF(o_hist)(b)
+
+    
+    return modele_non_biaise, ecdf_non_biaise
 
 
 def plot_distributions(dfs_tuple, titre, labels_tuple):
