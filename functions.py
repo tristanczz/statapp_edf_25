@@ -3,6 +3,8 @@ import numpy as np
 from statsmodels.distributions.empirical_distribution import ECDF
 import matplotlib.pyplot as plt
 import seaborn as sns
+import ot # Bibliothèque Python Optimal Transport
+from scipy.spatial.distance import cdist
 
 
 def csv_to_pd_univ(filepath, mois, var, years=None):
@@ -49,6 +51,41 @@ def csv_to_pd_univ(filepath, mois, var, years=None):
 
     # Ne garder que la colonne var
     df_final = df[[var]].copy()
+
+    return df_final
+
+def csv_to_pd_multi(filepath, mois, vars_list, years=None):
+    """
+    Charge un CSV et extrait PLUSIEURS variables pour un mois donné.
+    Garde la date en index pour pouvoir reconstruire la série temporelle.
+    """
+    if years is not None and (not isinstance(years, tuple) or len(years) != 2):
+        raise ValueError(f"years doit être un tuple de 2 éléments (année_début, année_fin)")
+    
+    # Lire le CSV
+    df = pd.read_csv(filepath, sep=';', parse_dates=['date'])
+
+    # Filtrer sur le mois
+    df = df[df['date'].dt.month == mois]
+    
+    # Filtrer sur la période d'années
+    if years is not None:
+        year_start, year_end = years
+        df = df[(df['date'].dt.year >= year_start) & (df['date'].dt.year <= year_end)]
+    
+    # Vérification
+    if df.empty:
+        raise ValueError(f"Aucune donnée trouvée pour le mois {mois} dans {filepath}")
+
+    # On met la date en index pour ne pas la perdre
+    df = df.set_index('date')
+    
+    # On sélectionne TOUTES les colonnes de la liste vars_list
+    # Attention: il faut que toutes les colonnes existent dans le CSV
+    try:
+        df_final = df[vars_list].copy()
+    except KeyError as e:
+        raise KeyError(f"Une des variables demandées n'est pas dans le fichier: {e}")
 
     return df_final
 
@@ -337,3 +374,38 @@ def extract_month_data(csv_path, month, columns=None, years=None):
     print(f"Données extraites de {csv_path}: {len(data)} lignes, {data.shape[1]} variables pour le mois {month}{period_info}")
     
     return data
+
+
+
+
+def cdf_t_multidim(Obs_hist, Mod_hist, Mod_fut):
+    """
+    Correction de biais Multidimensionnelle par Transport Optimal (Barycentric Mapping + NN).
+    """
+    # Conversion en arrays
+    Y0 = np.array(Obs_hist)
+    X0 = np.array(Mod_hist)
+    X1 = np.array(Mod_fut)
+    
+    # A. Transport Optimal entre Modèle Passé (X0) et Modèle Futur (X1)
+    # On calcule la "carte" qui transforme le passé en futur selon le modèle
+    M = ot.dist(X0, X1, metric='sqeuclidean') # Matrice de coût
+    n0, n1 = len(X0), len(X1)
+    a, b = np.ones(n0)/n0, np.ones(n1)/n1 # Poids uniformes
+    
+    # Résolution du transport (EMD)
+    gamma = ot.emd(a, b, M)
+    
+    # Projection barycentrique : Pour chaque point de X0, où atterrit-il en moyenne dans X1 ?
+    # C'est notre transformation T apprise : T(X0)
+    X0_transported = n0 * np.dot(gamma, X1)
+    
+    # B. Application aux Observations (Y0) par Plus Proche Voisin
+    # "Pour chaque Y0, chercher le point le plus proche de X0"
+    dists = cdist(Y0, X0, metric='euclidean')
+    idx_nn = np.argmin(dists, axis=1) # Indices des voisins dans X0
+    
+    # On applique la transformation du voisin : Y1 = T(X0_voisin)
+    Y1_corr = X0_transported[idx_nn]
+    
+    return Y1_corr
