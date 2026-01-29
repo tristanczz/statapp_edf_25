@@ -3,6 +3,7 @@ import numpy as np
 from statsmodels.distributions.empirical_distribution import ECDF
 import matplotlib.pyplot as plt
 import seaborn as sns
+from scipy.stats import ks_2samp
 
 
 def csv_to_pd_univ(filepath, mois, var, years=None):
@@ -29,23 +30,26 @@ def csv_to_pd_univ(filepath, mois, var, years=None):
         DataFrame contenant uniquement la colonne 'var' filtrée sur le mois et la période demandés.
     """
     if years is not None and (not isinstance(years, tuple) or len(years) != 2):
-        raise ValueError(f"years doit être un tuple de 2 éléments (année_début, année_fin)")
-    
+        raise ValueError("years doit être un tuple de 2 éléments (année_début, année_fin)")
+
     # Lire le CSV avec ; et parser la colonne date
     df = pd.read_csv(filepath, sep=';', parse_dates=['date'])
 
     # Filtrer sur le mois
     df = df[df['date'].dt.month == mois]
-    
+
     # Filtrer sur la période d'années si spécifié
     if years is not None:
         year_start, year_end = years
         df = df[(df['date'].dt.year >= year_start) & (df['date'].dt.year <= year_end)]
-    
+
     # Vérifier qu'il reste des données
     if len(df) == 0:
         period_str = f" pour la période {years[0]}-{years[1]}" if years else ""
-        raise ValueError(f"Aucune donnée trouvée pour le mois {mois} et la variable {var}{period_str}")
+        raise ValueError(
+            f"Aucune donnée pour le mois {mois} "
+            f"et la variable {var}{period_str}"
+        )
 
     # Ne garder que la colonne var
     df_final = df[[var]].copy()
@@ -116,31 +120,31 @@ def plot_distributions(dfs_tuple, titre, labels_tuple):
     """
     # Configurer le style
     sns.set_style("whitegrid")
-    
+
     # Extraire les deux DataFrames du tuple
     df1, df2 = dfs_tuple
-    
+
     # Récupérer les données
     col1, col2 = df1.columns[0], df2.columns[0]
     data1 = df1[col1]
     data2 = df2[col2]
 
-    #Récupérer les labels
+    # Récupérer les labels
     label1, label2 = labels_tuple
 
     # Créer la figure
     fig, ax = plt.subplots(figsize=(12, 6))
 
     # Histogrammes superposés
-    ax.hist(data1, bins=30, alpha=0.4, label=f' {label1} (histogramme)', 
+    ax.hist(data1, bins=30, alpha=0.4, label=f' {label1} (histogramme)',
             color='#e74c3c', density=True, edgecolor='black', linewidth=0.5)
-    ax.hist(data2, bins=30, alpha=0.4, label=f'{label2} (histogramme)', 
+    ax.hist(data2, bins=30, alpha=0.4, label=f'{label2} (histogramme)',
             color='#3498db', density=True, edgecolor='black', linewidth=0.5)
 
     # Courbes de densité par-dessus
-    sns.kdeplot(data=data1, label=f' {label1} (densité)', linewidth=2.5, 
+    sns.kdeplot(data=data1, label=f' {label1} (densité)', linewidth=2.5,
                 ax=ax, color='#c0392b', alpha=0.9)
-    sns.kdeplot(data=data2, label=f'{label2} (densité)', linewidth=2.5, 
+    sns.kdeplot(data=data2, label=f'{label2} (densité)', linewidth=2.5,
                 ax=ax, color='#2980b9', alpha=0.9)
 
     # Labels et titre
@@ -151,7 +155,7 @@ def plot_distributions(dfs_tuple, titre, labels_tuple):
 
     # Titre général
     ax.set_title(
-        titre, 
+        titre,
         fontsize=14, fontweight='bold', pad=15
     )
 
@@ -160,129 +164,65 @@ def plot_distributions(dfs_tuple, titre, labels_tuple):
     plt.close('all')
 
 
-def comparer_distributions(dfs_tuple):
+def comparer_distributions(df1, col1_label, df2, col2_label):
     """
-    Compare les statistiques descriptives de deux distributions.
+    Compare deux distributions à partir de deux DataFrames à une seule colonne.
+    Utilise col1_label et col2_label comme étiquettes dans le tableau de résultat.
 
-    Paramètres:
-    -----------
-    dfs_tuple : DataFrames
-        Tuple contenant deux DataFrames avec une seule colonne chacun
+    Paramètres
+    ----------
+    df1, df2 : pandas.DataFrame
+        DataFrames contenant chacun une seule colonne
+    col1_label, col2_label : str
+        Labels pour les colonnes dans le tableau de sortie
 
-    Retourne:
-    ---------
-    DataFrame
-        Tableau comparatif des statistiques
+    Retour
+    ------
+    result_df : pandas.DataFrame
+        Tableau avec espérances et variances par "label"
+    summary_df : pandas.DataFrame
+        Tableau avec différence d'espérances, rapport des variances et test KS
     """
-    # Récupérer les noms des colonnes
-    df1, df2 = dfs_tuple
-    col1, col2 = df1.columns[0], df2.columns[0]
 
-    # Calculer les statistiques pour chaque colonne
-    stats = {
-        'Statistique': ['Moyenne', 'Médiane', 'Écart-type', 'Variance',
-                        'Minimum', 'Maximum', 'Q1 (25%)', 'Q3 (75%)',
-                        'Étendue',],
-        col1: [
-            df1[col1].mean(),
-            df1[col1].median(),
-            df1[col1].std(),
-            df1[col1].var(),
-            df1[col1].min(),
-            df1[col1].max(),
-            df1[col1].quantile(0.25),
-            df1[col1].quantile(0.75),
-            df1[col1].max() - df1[col1].min(),
-        ],
-        col2: [
-            df2[col2].mean(),
-            df2[col2].median(),
-            df2[col2].std(),
-            df2[col2].var(),
-            df2[col2].min(),
-            df2[col2].max(),
-            df2[col2].quantile(0.25),
-            df2[col2].quantile(0.75),
-            df2[col2].max() - df2[col2].min(),
-        ]
-    }
+    # Récupérer la première colonne de chaque DataFrame
+    x = df1.iloc[:, 0].dropna()
+    y = df2.iloc[:, 0].dropna()
 
-    # Créer le DataFrame de comparaison
-    df_stats = pd.DataFrame(stats)
+    # Espérances
+    mean_x = x.mean()
+    mean_y = y.mean()
+    mean_diff = mean_y - mean_x
 
-    # Arrondir les valeurs
-    df_stats = df_stats.round(3)
+    # Variances
+    var_x = x.var(ddof=1)
+    var_y = y.var(ddof=1)
+    var_ratio = var_y / var_x if var_x != 0 else np.nan
 
-    return df_stats
+    # Test de Kolmogorov–Smirnov
+    ks_stat, ks_pvalue = ks_2samp(x, y)
 
+    # Tableau résultat par label
+    result_df = pd.DataFrame({
+        "Distribution": [col1_label, col2_label],
+        "Espérance": [mean_x, mean_y],
+        "Variance": [var_x, var_y]
+    })
 
-def plot_distributions_univ_norm(norm_model, norm_obs, nom_modele, mois, var):
-    """
-    Trace deux distributions normales avec leurs paramètres.
+    # Tableau récapitulatif
+    summary_df = pd.DataFrame({
+        "Différence des espérances (Y - X)": [mean_diff],
+        "Rapport des variances (Var Y / Var X)": [var_ratio],
+        "KS statistique": [ks_stat],
+        "KS p-value": [ks_pvalue]
+    })
 
-    Paramètres:
-    -----------
-    norm_model : tuple (mean, std)
-        Paramètres de la loi normale du modèle (moyenne, écart-type)
-    norm_obs : tuple (mean, std)
-        Paramètres de la loi normale observée (moyenne, écart-type)
-    nom_modele : str
-        Nom du modèle
-    var : str
-        Nom de la variable
-    mois : int
-        Numéro du mois (1-12)
-    """
-    # Noms des mois
-    mois_noms = {
-        1: "Janvier", 2: "Février", 3: "Mars", 4: "Avril",
-        5: "Mai", 6: "Juin", 7: "Juillet", 8: "Août",
-        9: "Septembre", 10: "Octobre", 11: "Novembre", 12: "Décembre"
-    }
-
-    # Décomposer les paramètres
-    mean_model, std_model = norm_model
-    mean_obs, std_obs = norm_obs
-
-    # Créer une plage de valeurs pour tracer les courbes
-    x_min = min(mean_model - 4*std_model, mean_obs - 4*std_obs)
-    x_max = max(mean_model + 4*std_model, mean_obs + 4*std_obs)
-    x = np.linspace(x_min, x_max, 1000)
-
-    # Calculer les densités
-    y_model = norm.pdf(x, mean_model, std_model)
-    y_obs = norm.pdf(x, mean_obs, std_obs)
-
-    # Configurer le style
-    sns.set_style("whitegrid")
-    plt.figure(figsize=(10, 6))
-
-    # Tracer les courbes
-    plt.plot(x, y_model, linewidth=2.5, color='#e74c3c', alpha=0.8,
-             label=f'Modèle: μ={mean_model:.2f}, σ={std_model:.2f}')
-    plt.plot(x, y_obs, linewidth=2.5, color='#3498db', alpha=0.8,
-             label=f'Corrigé: μ={mean_obs:.2f}, σ={std_obs:.2f}')
-
-    # Ajouter des zones ombrées sous les courbes
-    plt.fill_between(x, y_model, alpha=0.2, color='#e74c3c')
-    plt.fill_between(x, y_obs, alpha=0.2, color='#3498db')
-
-    # Labels et titre
-    plt.xlabel('Valeur', fontsize=12)
-    plt.ylabel('Densité de probabilité', fontsize=12)
-    plt.title(f'Correction du modèle {nom_modele} pour {var} et {mois_noms[mois]}', 
-              fontsize=14, fontweight='bold')
-    plt.legend(fontsize=11, loc='best')
-    plt.grid(alpha=0.3)
-
-    plt.tight_layout()
-    plt.show()
+    return result_df, summary_df
 
 
 def extract_month_data(csv_path, month, columns=None, years=None):
     """
     Extrait les données d'un mois spécifique d'un fichier CSV pour une période donnée.
-    
+
     Parameters:
     -----------
     csv_path : str
@@ -294,7 +234,7 @@ def extract_month_data(csv_path, month, columns=None, years=None):
     years : tuple, optional
         Tuple (année_début, année_fin) pour filtrer la période
         Ex: (1985, 2005) pour extraire les données de 1985 à 2005 inclus
-    
+
     Returns:
     --------
     numpy.ndarray
@@ -302,38 +242,42 @@ def extract_month_data(csv_path, month, columns=None, years=None):
     """
     if not 1 <= month <= 12:
         raise ValueError(f"Le mois doit être entre 1 et 12, reçu: {month}")
-    
+
     if years is not None and (not isinstance(years, tuple) or len(years) != 2):
-        raise ValueError(f"years doit être un tuple de 2 éléments (année_début, année_fin)")
-    
+        raise ValueError("years doit être un tuple de 2 éléments (année_début, année_fin)")
+
     df = pd.read_csv(csv_path, sep=';')
     date_col = df.columns[0]
-    
+
     # Conversion flexible pour gérer différents formats de date
     df[date_col] = pd.to_datetime(df[date_col])
-    
+
     # Filtrer par mois
     df_filtered = df[df[date_col].dt.month == month]
-    
+
     # Filtrer par période d'années si spécifié
     if years is not None:
         year_start, year_end = years
         df_filtered = df_filtered[
-            (df_filtered[date_col].dt.year >= year_start) & 
+            (df_filtered[date_col].dt.year >= year_start) &
             (df_filtered[date_col].dt.year <= year_end)
         ]
-    
+
     if len(df_filtered) == 0:
         period_str = f" pour la période {years[0]}-{years[1]}" if years else ""
         raise ValueError(f"Aucune donnée trouvée pour le mois {month}{period_str}")
-    
+
     # Si des colonnes spécifiques sont demandées
     if columns is not None:
         data = df_filtered[columns].values
     else:
         data = df_filtered.iloc[:, 1:].values
-    
+
     period_info = f" ({years[0]}-{years[1]})" if years else ""
-    print(f"Données extraites de {csv_path}: {len(data)} lignes, {data.shape[1]} variables pour le mois {month}{period_info}")
-    
+    print(
+        f"Données extraites de {csv_path}: "
+        f"{len(data)} lignes, {data.shape[1]} variables "
+        f"pour le mois {month}{period_info}"
+    )
+
     return data
