@@ -210,8 +210,8 @@ def comparer_distributions(df1, col1_label, df2, col2_label):
 
     # Tableau récapitulatif
     summary_df = pd.DataFrame({
-        "Différence des espérances (Y - X)": [mean_diff],
-        "Rapport des variances (Var Y / Var X)": [var_ratio],
+        "Différence des espérances": [mean_diff],
+        "Rapport des variances": [var_ratio],
         "KS statistique": [ks_stat],
         "KS p-value": [ks_pvalue]
     })
