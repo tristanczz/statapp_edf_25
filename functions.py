@@ -4,6 +4,8 @@ from statsmodels.distributions.empirical_distribution import ECDF
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import ks_2samp
+import ot
+from sklearn.preprocessing import StandardScaler
 
 
 def csv_to_pd_univ(filepath, mois, var, years=None):
@@ -269,15 +271,96 @@ def extract_month_data(csv_path, month, columns=None, years=None):
 
     # Si des colonnes spécifiques sont demandées
     if columns is not None:
-        data = df_filtered[columns].values
+        data = df_filtered[columns]
     else:
-        data = df_filtered.iloc[:, 1:].values
-
-    period_info = f" ({years[0]}-{years[1]})" if years else ""
-    print(
-        f"Données extraites de {csv_path}: "
-        f"{len(data)} lignes, {data.shape[1]} variables "
-        f"pour le mois {month}{period_info}"
-    )
+        data = df_filtered.iloc[:, 1:]
 
     return data
+
+
+def cdf_t_multiv(modele_hist, obs_hist, modele_futur):
+    """
+    Applique la méthode CDF-t pour corriger les biais d'un modèle climatique
+    pour plusieurs colonnes indépendantes.
+
+    Paramètres:
+    -----------
+    modele_hist : DataFrame
+        Données historiques du modèle (plusieurs colonnes)
+    obs_hist : DataFrame
+        Observations historiques (mêmes colonnes que modele_hist)
+    modele_futur : DataFrame
+        Projections futures du modèle (mêmes colonnes)
+
+    Retourne:
+    ---------
+    DataFrame
+        DataFrame avec les colonnes corrigées, mêmes noms que modele_futur
+    """
+    # Initialiser un dictionnaire pour stocker les colonnes corrigées
+    corrected_data = {}
+
+    # Itérer sur toutes les colonnes
+    for col in modele_hist.columns:
+        m_hist = modele_hist[col].values
+        o_hist = obs_hist[col].values
+        m_futur = modele_futur[col].values
+
+        # ECDFs
+        ecdf_modele_futur = ECDF(m_futur)
+        ecdf_modele_hist = ECDF(m_hist)
+
+        # Étape 1: probabilités selon le modèle futur
+        p_futur = ecdf_modele_futur(m_futur)
+
+        # Étape 2: quantiles correspondants dans obs_hist
+        val_hist = np.quantile(o_hist, p_futur)
+
+        # Étape 3: probabilités selon le modèle historique
+        p_obs = ecdf_modele_hist(val_hist)
+
+        # Étape 4: quantiles corrigés dans le modèle futur
+        obs_futur_corrige = np.quantile(m_futur, p_obs)
+
+        # Stocker la colonne corrigée
+        corrected_data[col] = obs_futur_corrige
+
+    # Retourner un DataFrame final avec toutes les colonnes
+    return pd.DataFrame(corrected_data, index=modele_futur.index)  
+
+
+def gaussian_ot(modele_hist, obs_hist, modele_futur):
+
+    # Conversion en array numpy
+    X0 = modele_hist.values
+    X1 = modele_futur.values
+    Y0 = obs_hist.values
+
+    # Standardisation
+    scaler_model = StandardScaler()
+    scaler_obs = StandardScaler()
+
+    X0_scaled = scaler_model.fit_transform(X0)
+    X1_scaled = scaler_model.transform(X1)   # même scaler que X0
+    Y0_scaled = scaler_obs.fit_transform(Y0)
+
+    # Estimation du transport linéaire gaussien
+    mu_X0 = X0_scaled.mean(axis=0)
+    mu_X1 = X1_scaled.mean(axis=0)
+
+    cov_X0 = np.cov(X0_scaled.T)
+    cov_X1 = np.cov(X1_scaled.T)
+
+    A, b = ot.gaussian.bures_wasserstein_mapping(mu_X0, mu_X1, cov_X0, cov_X1)
+
+    # Application du transport aux observations
+    # Projection future des observations
+    Y1_corrected_scaled = (A @ Y0_scaled.T).T + b
+
+    # Revenir à l'échelle originale
+    Y1_corrected = scaler_obs.inverse_transform(Y1_corrected_scaled)
+
+    # Conversion dataframe pandas
+    Y1_corr_df = pd.DataFrame(Y1_corrected, columns=obs_hist.columns)
+
+    return Y1_corr_df
