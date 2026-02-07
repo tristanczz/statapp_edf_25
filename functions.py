@@ -6,6 +6,7 @@ import seaborn as sns
 from scipy.stats import ks_2samp
 import ot
 from sklearn.preprocessing import StandardScaler
+from typing import List, Tuple
 
 
 def csv_to_pd_univ(filepath, mois, var, years=None):
@@ -326,7 +327,7 @@ def cdf_t_multiv(modele_hist, obs_hist, modele_futur):
         corrected_data[col] = obs_futur_corrige
 
     # Retourner un DataFrame final avec toutes les colonnes
-    return pd.DataFrame(corrected_data, index=modele_futur.index)  
+    return pd.DataFrame(corrected_data, index=modele_futur.index)
 
 
 def gaussian_ot(modele_hist, obs_hist, modele_futur):
@@ -364,3 +365,137 @@ def gaussian_ot(modele_hist, obs_hist, modele_futur):
     Y1_corr_df = pd.DataFrame(Y1_corrected, columns=obs_hist.columns)
 
     return Y1_corr_df
+
+
+def compare_spearman(df1: pd.DataFrame,
+                     df2: pd.DataFrame,
+                     columns: List[str]) -> Tuple[float, float, float]:
+    """
+    Calcule le coefficient de Spearman entre deux colonnes pour chaque dataframe
+    et retourne la différence entre les deux coefficients.
+
+    Parameters:
+    -----------
+    df1 : pd.DataFrame
+        Premier dataframe
+    df2 : pd.DataFrame
+        Deuxième dataframe
+    columns : List[str]
+        Liste de deux noms de colonnes à corréler
+
+    Returns:
+    --------
+    Tuple[float, float, float]
+        (rho_df1, rho_df2, différence)
+
+    Raises:
+    -------
+    ValueError
+        Si la liste ne contient pas exactement 2 colonnes
+        Si les colonnes ne sont pas présentes dans les deux dataframes
+    """
+    # Vérifications
+    if len(columns) != 2:
+        raise ValueError("La liste doit contenir exactement 2 colonnes")
+
+    col1, col2 = columns
+
+    # Vérifier que les colonnes existent dans les deux dataframes
+    for df, name in [(df1, 'df1'), (df2, 'df2')]:
+        if col1 not in df.columns:
+            raise ValueError(f"La colonne '{col1}' n'existe pas dans {name}")
+        if col2 not in df.columns:
+            raise ValueError(f"La colonne '{col2}' n'existe pas dans {name}")
+
+    # Calcul des coefficients de Spearman
+    rho_df1 = df1[col1].corr(df1[col2], method='spearman')
+    rho_df2 = df2[col1].corr(df2[col2], method='spearman')
+
+    # Calcul de la différence
+    difference = rho_df1 - rho_df2
+
+    return rho_df1, rho_df2, difference
+
+
+def rank_transform(series: pd.Series) -> pd.Series:
+    """
+    Transforme une série en rangs normalisés (copule empirique).
+
+    Parameters:
+    -----------
+    series : pd.Series
+        Série à transformer
+
+    Returns:
+    --------
+    pd.Series
+        Rangs normalisés entre 0 et 1
+    """
+    n = len(series)
+    ranks = series.rank(method='average')
+    return ranks / (n + 1)  # Division par n+1 pour éviter les valeurs exactement 0 ou 1
+
+
+def copula_transform(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
+    """
+    Transforme les colonnes spécifiées en copule empirique.
+
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        Dataframe source
+    columns : List[str]
+        Colonnes à transformer
+
+    Returns:
+    --------
+    pd.DataFrame
+        Dataframe avec colonnes transformées
+    """
+    df_copula = df.copy()
+    for col in columns:
+        df_copula[col] = rank_transform(df[col])
+    return df_copula
+
+
+def compare_joint_distributions(df1: pd.DataFrame,
+                                df2: pd.DataFrame,
+                                columns: List[str]) -> None:
+    """
+    Compare visuellement deux distributions jointes
+    en les normalisant par leur fonction de répartition.
+    Affiche les deux distributions sur le même graphique dans l'espace (0,1)^2.
+
+    Parameters:
+    -----------
+    df1, df2 : pd.DataFrame
+        Dataframes à comparer
+    columns : List[str]
+        Liste de deux colonnes à analyser
+    """
+    if len(columns) != 2:
+        raise ValueError("La liste doit contenir exactement 2 colonnes")
+
+    col1, col2 = columns
+
+    # Transformation en copule empirique
+    copula1 = copula_transform(df1, columns)
+    copula2 = copula_transform(df2, columns)
+
+    # Visualisation
+    plt.figure(figsize=(8, 8))
+
+    plt.scatter(copula1[col1], copula1[col2],
+                alpha=0.4, s=20, color='blue', label=col1)
+    plt.scatter(copula2[col1], copula2[col2],
+                alpha=0.4, s=20, color='red', label=col2)
+
+    plt.xlabel(f'{col1} (rang normalisé)', fontsize=12)
+    plt.ylabel(f'{col2} (rang normalisé)', fontsize=12)
+    plt.title('Comparaison des copules empiriques', fontsize=14)
+    plt.xlim(0, 1)
+    plt.ylim(0, 1)
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
