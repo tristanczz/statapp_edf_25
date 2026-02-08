@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-def csv_to_pd(filepath, mois, var, years=None):
+def csv_to_pd(filepath, mois=None, var=None, years=None):
     """
     Charge un CSV à partir d'un chemin donné,
     filtre pour ne garder que les valeurs des variables dans var pour le mois indiqué
@@ -35,7 +35,8 @@ def csv_to_pd(filepath, mois, var, years=None):
     df = pd.read_csv(filepath, sep=';', parse_dates=['date'])
 
     # Filtrer sur le mois
-    df = df[df['date'].dt.month == mois]
+    if mois is not None:
+        df = df[df['date'].dt.month == mois]
     
     # Filtrer sur la période d'années si spécifié
     if years is not None:
@@ -48,8 +49,10 @@ def csv_to_pd(filepath, mois, var, years=None):
         raise ValueError(f"Aucune donnée trouvée pour le mois {mois} et la variable {var}{period_str}")
 
     # Ne garder que les variables dans var 
-
-    df_final = df[var].copy()
+    if var is not None:
+        df_final = df[var].copy()
+    else:
+        df_final = df.copy()
 
     return df_final
 
@@ -60,49 +63,53 @@ def cdf_t_univ(modele_hist, obs_hist, modele_futur):
 
     Paramètres:
     -----------
-    modele_hist : DataFrame
+    modele_hist : Numpy array
         Données historiques du modèle (une seule colonne)
-    obs_hist : DataFrame
+    obs_hist : Numpy array
         Observations historiques (une seule colonne)
-    modele_futur : DataFrame
+    modele_futur : Numpy array
         Projections futures du modèle (une seule colonne)
 
     Retourne:
     ---------
-    DataFrame
-        DataFrame avec deux colonnes : 'valeurs_modele' et 'valeurs_corrigees'
+    modele_non_biaise : pd.DataFrame
+        Données futures corrigées avec les dates associées
+    ecdf_non_biaise : function
+        Fonction de répartition empirique du modèle corrigé
     """
-    # Extraire les valeurs des colonnes
-    m_hist = modele_hist.squeeze().to_numpy()
-    o_hist = obs_hist.squeeze().to_numpy()
-    m_futur = modele_futur.squeeze().to_numpy()
 
     # Fonctions de répartition empiriques 
-    ecdf_modele_futur = ECDF(m_futur) #F_X1
-    ecdf_modele_hist = ECDF(m_hist) # F_X0
+    ecdf_modele_futur = ECDF(modele_futur) #F_X1
+    ecdf_modele_hist = ECDF(modele_hist) # F_X0
 
     
-    #Quantile mapping en supposant que la relation entre observation et modèle est inchangée dans le temps : 
-    q_futur = ecdf_modele_futur(m_futur) # F_X1(X1)
+    #Quantile mapping en supposant que la relation de stationnarité est vérifiée :
+     
+    q_futur = ecdf_modele_futur(modele_futur) # F_X1(X1)
 
-    b = np.quantile(o_hist, q_futur) #F_Y0^{-1}(F_X1(X1))
+    b = np.quantile(obs_hist, q_futur) #F_Y0^{-1}(F_X1(X1))
 
     c = ecdf_modele_hist(b) #F_X0(b)
 
-    modele_non_biaise = np.quantile(m_futur, c) #F_Y1^{-1}(c)
+    modele_non_biaise = np.quantile(modele_futur, c) #F_Y1^{-1}(c)
 
     # ECDF du modele non biaisé
     def ecdf_non_biaise(x):
         
         p = ecdf_modele_futur(x)
-        b = np.quantile(m_hist, p)
-        return ECDF(o_hist)(b)
+        b = np.quantile(modele_hist, p)
+        return ECDF(obs_hist)(b)
 
     
     return modele_non_biaise, ecdf_non_biaise
 
 
-def plot_distributions(dfs_tuple, titre, labels_tuple):
+
+
+
+
+
+def plot_distributions(data, titre, labels_tuple):
     """
     Trace les distributions de deux DataFrames en les superposant.
     Histogrammes et courbes de densité sont combinés sur le même graphique.
@@ -121,12 +128,7 @@ def plot_distributions(dfs_tuple, titre, labels_tuple):
     sns.set_style("whitegrid")
     
     # Extraire les deux DataFrames du tuple
-    df1, df2 = dfs_tuple
-    
-    # Récupérer les données
-    col1, col2 = df1.columns[0], df2.columns[0]
-    data1 = df1[col1]
-    data2 = df2[col2]
+    data1, data2 = data
 
     #Récupérer les labels
     label1, label2 = labels_tuple
@@ -163,13 +165,13 @@ def plot_distributions(dfs_tuple, titre, labels_tuple):
     plt.close('all')
 
 
-def comparer_distributions(dfs_tuple):
+def comparer_distributions_univ(dis1, dis2):
     """
     Compare les statistiques descriptives de deux distributions.
 
     Paramètres:
     -----------
-    dfs_tuple : DataFrames
+    dfs_tuple : Numpy arrays
         Tuple contenant deux DataFrames avec une seule colonne chacun
 
     Retourne:
@@ -177,65 +179,47 @@ def comparer_distributions(dfs_tuple):
     DataFrame
         Tableau comparatif des statistiques
     """
-    # Récupérer les noms des colonnes
-    df1, df2 = dfs_tuple
-    col1, col2 = df1.columns[0], df2.columns[0]
+
 
     # Calculer les statistiques pour chaque colonne
     stats = {
         'Statistique': ['Moyenne', 'Médiane', 'Écart-type', 'Variance',
                         'Minimum', 'Maximum', 'Q1 (25%)', 'Q3 (75%)',
-                        'Étendue',],
-        col1: [
-            df1[col1].mean(),
-            df1[col1].median(),
-            df1[col1].std(),
-            df1[col1].var(),
-            df1[col1].min(),
-            df1[col1].max(),
-            df1[col1].quantile(0.25),
-            df1[col1].quantile(0.75),
-            df1[col1].max() - df1[col1].min(),
+                        'Étendue'],
+        'Distribution 1': [
+            dis1.mean(),
+            np.median(dis1),
+            np.std(dis1),
+            np.var(dis1),
+            dis1.min(),
+            dis1.max(),
+            np.quantile(dis1, 0.25),
+            np.quantile(dis1, 0.75),
+            dis1.max() - dis1.min(),
         ],
-        col2: [
-            df2[col2].mean(),
-            df2[col2].median(),
-            df2[col2].std(),
-            df2[col2].var(),
-            df2[col2].min(),
-            df2[col2].max(),
-            df2[col2].quantile(0.25),
-            df2[col2].quantile(0.75),
-            df2[col2].max() - df2[col2].min(),
+        'Distribution 2': [
+            dis2.mean(),
+            np.median(dis2),
+            np.std(dis2),
+            np.var(dis2),
+            dis2.min(),
+            dis2.max(),
+            np.quantile(dis2, 0.25),
+            np.quantile(dis2, 0.75),
+            dis2.max() - dis2.min(),
         ]
     }
 
-    # Créer le DataFrame de comparaison
     df_stats = pd.DataFrame(stats)
-
-    # Arrondir les valeurs
     df_stats = df_stats.round(3)
 
     return df_stats
 
 
-def plot_distributions_univ_norm(norm_model, norm_obs, nom_modele, mois, var):
-    """
-    Trace deux distributions normales avec leurs paramètres.
 
-    Paramètres:
-    -----------
-    norm_model : tuple (mean, std)
-        Paramètres de la loi normale du modèle (moyenne, écart-type)
-    norm_obs : tuple (mean, std)
-        Paramètres de la loi normale observée (moyenne, écart-type)
-    nom_modele : str
-        Nom du modèle
-    var : str
-        Nom de la variable
-    mois : int
-        Numéro du mois (1-12)
-    """
+"""
+def plot_distributions_univ_norm(norm_model, norm_obs, nom_modele, mois, var):
+
     # Noms des mois
     mois_noms = {
         1: "Janvier", 2: "Février", 3: "Mars", 4: "Avril",
@@ -283,26 +267,8 @@ def plot_distributions_univ_norm(norm_model, norm_obs, nom_modele, mois, var):
 
 
 def extract_month_data(csv_path, month, columns=None, years=None):
-    """
-    Extrait les données d'un mois spécifique d'un fichier CSV pour une période donnée.
     
-    Parameters:
-    -----------
-    csv_path : str
-        Chemin vers le fichier CSV (séparateur ';')
-    month : int
-        Numéro du mois à extraire (1-12)
-    columns : list, optional
-        Liste des colonnes à extraire (dans l'ordre souhaité)
-    years : tuple, optional
-        Tuple (année_début, année_fin) pour filtrer la période
-        Ex: (1985, 2005) pour extraire les données de 1985 à 2005 inclus
     
-    Returns:
-    --------
-    numpy.ndarray
-        Array de shape (n_samples, n_variables) avec les données du mois et de la période
-    """
     if not 1 <= month <= 12:
         raise ValueError(f"Le mois doit être entre 1 et 12, reçu: {month}")
     
@@ -339,4 +305,4 @@ def extract_month_data(csv_path, month, columns=None, years=None):
     period_info = f" ({years[0]}-{years[1]})" if years else ""
     print(f"Données extraites de {csv_path}: {len(data)} lignes, {data.shape[1]} variables pour le mois {month}{period_info}")
     
-    return data
+    return data"""
