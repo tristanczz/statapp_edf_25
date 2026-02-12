@@ -38,6 +38,9 @@ def csv_to_pd_univ(filepath, mois, var, years=None):
     # Lire le CSV avec ; et parser la colonne date
     df = pd.read_csv(filepath, sep=';', parse_dates=['date'])
 
+    # Moyenne par jour
+    df = df.groupby(df.date.dt.floor(freq="1d"))[var].mean().reset_index(drop=False)
+
     # Filtrer sur le mois
     df = df[df['date'].dt.month == mois]
 
@@ -240,8 +243,7 @@ def extract_month_data(csv_path, month, columns=None, years=None):
 
     Returns:
     --------
-    numpy.ndarray
-        Array de shape (n_samples, n_variables) avec les données du mois et de la période
+    DataFrame Pandas
     """
     if not 1 <= month <= 12:
         raise ValueError(f"Le mois doit être entre 1 et 12, reçu: {month}")
@@ -254,6 +256,9 @@ def extract_month_data(csv_path, month, columns=None, years=None):
 
     # Conversion flexible pour gérer différents formats de date
     df[date_col] = pd.to_datetime(df[date_col])
+
+    # fait une moyenne par jour
+    df = df.groupby(df.date.dt.floor(freq="1d"))[columns].mean().reset_index(drop=False)
 
     # Filtrer par mois
     df_filtered = df[df[date_col].dt.month == month]
