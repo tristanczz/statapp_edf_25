@@ -36,6 +36,11 @@ def csv_to_pd_univ(filepath, mois, var, years=None):
     # Lire le CSV avec ; et parser la colonne date
     df = pd.read_csv(filepath, sep=';', parse_dates=['date'])
 
+    # --- MODIFICATION (Point 0) : Moyenne journalière ---
+    # On groupe par jour pour passer de données horaires à journalières
+    df = df.groupby(df['date'].dt.floor("D"))[var].mean().reset_index()
+    # ----------------------------------------------------
+
     # Filtrer sur le mois
     df = df[df['date'].dt.month == mois]
     
@@ -51,41 +56,6 @@ def csv_to_pd_univ(filepath, mois, var, years=None):
 
     # Ne garder que la colonne var
     df_final = df[[var]].copy()
-
-    return df_final
-
-def csv_to_pd_multi(filepath, mois, vars_list, years=None):
-    """
-    Charge un CSV et extrait PLUSIEURS variables pour un mois donné.
-    Garde la date en index pour pouvoir reconstruire la série temporelle.
-    """
-    if years is not None and (not isinstance(years, tuple) or len(years) != 2):
-        raise ValueError(f"years doit être un tuple de 2 éléments (année_début, année_fin)")
-    
-    # Lire le CSV
-    df = pd.read_csv(filepath, sep=';', parse_dates=['date'])
-
-    # Filtrer sur le mois
-    df = df[df['date'].dt.month == mois]
-    
-    # Filtrer sur la période d'années
-    if years is not None:
-        year_start, year_end = years
-        df = df[(df['date'].dt.year >= year_start) & (df['date'].dt.year <= year_end)]
-    
-    # Vérification
-    if df.empty:
-        raise ValueError(f"Aucune donnée trouvée pour le mois {mois} dans {filepath}")
-
-    # On met la date en index pour ne pas la perdre
-    df = df.set_index('date')
-    
-    # On sélectionne TOUTES les colonnes de la liste vars_list
-    # Attention: il faut que toutes les colonnes existent dans le CSV
-    try:
-        df_final = df[vars_list].copy()
-    except KeyError as e:
-        raise KeyError(f"Une des variables demandées n'est pas dans le fichier: {e}")
 
     return df_final
 
