@@ -6,4 +6,6 @@ statsmodels
 seaborn
 scikit-learn
 pot
+scikit-learn
+
 

@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import ot
+from sklearn.preprocessing import StandardScaler
 
 
 # ==============================================================================
@@ -9,68 +10,80 @@ import ot
 
 def build_common_grid(X, Y, bin_size):
     """
-    Construit une grille régulière commune couvrant à la fois X et Y.
+    Construit les bords (edges) d'une grille reguliere commune a X et Y.
+
+    On ne calcule PAS les centres ici : le produit cartesien des centres
+    (np.meshgrid) explose en memoire pour des donnees multivariees avec
+    beaucoup de bins. Les centres sont calcules a la demande uniquement
+    pour les cellules non vides, via get_centers_nz().
 
     Retourne
     --------
-    edges   : list de d arrays - bords des bins dans chaque dimension
-    centers : array (n_cells, d) - centre de chaque cellule, en ordre C
-              (cohérent avec np.histogramdd et np.ravel_multi_index)
+    edges : list de d arrays - bords des bins dans chaque dimension
     """
     d = X.shape[1]
-
     mins = np.minimum(X.min(axis=0), Y.min(axis=0)) - bin_size
     maxs = np.maximum(X.max(axis=0), Y.max(axis=0)) + bin_size
-
     edges = [np.arange(mins[i], maxs[i] + bin_size, bin_size) for i in range(d)]
+    return edges
 
-    dim_centers = [(e[:-1] + e[1:]) / 2 for e in edges]
 
-    # indexing='ij' : cohérent avec histogramdd (première dim varie en premier)
-    grids = np.meshgrid(*dim_centers, indexing='ij')
-    centers = np.column_stack([g.ravel() for g in grids])   # (n_cells, d)
+def get_centers_nz(idx_nz, edges):
+    """
+    Calcule les centres uniquement pour les cellules non vides (idx_nz).
 
-    return edges, centers
+    Evite de materialiser la grille complete. Convertit les indices 1D
+    aplatis en indices multi-dimensionnels, puis calcule le centre de
+    chaque cellule dans chaque dimension.
+
+    Parametres
+    ----------
+    idx_nz : array (n_nz,) - indices 1D des cellules non vides
+    edges  : list de d arrays - bords des bins
+
+    Retourne
+    --------
+    centers_nz : array (n_nz, d) - centres des cellules non vides
+    """
+    d = len(edges)
+    n_bins = np.array([len(e) - 1 for e in edges])
+
+    # Conversion index 1D -> indices multi-dim (ordre C)
+    multi_idx = np.array(np.unravel_index(idx_nz, n_bins)).T  # (n_nz, d)
+
+    # Centre de chaque cellule = milieu de son bin dans chaque dimension
+    centers_nz = np.zeros((len(idx_nz), d))
+    for dim in range(d):
+        bin_idx = multi_idx[:, dim]
+        centers_nz[:, dim] = (edges[dim][bin_idx] + edges[dim][bin_idx + 1]) / 2
+
+    return centers_nz
 
 
 def assign_cells(points, edges):
     """
-    Assigne chaque point à son index de cellule dans la grille définie par edges.
+    Assigne chaque point a son index de cellule dans la grille (O(d) par point).
 
-    Cette fonction est O(d) par point (calcul direct par searchsorted),
-    contrairement à l'ancienne find_cell_index qui était O(n_cells) par point
-    et rendait le code infiniment lent sur de vraies données.
-
-    L'index retourné est un index 1D aplati en ordre C, cohérent avec
-    histogramdd et build_common_grid (indexing='ij').
-
-    Paramètres
-    ----------
-    points : array (n, d)
-    edges  : list de d arrays - bords des bins (retournés par build_common_grid)
+    Utilise searchsorted sur les edges : beaucoup plus rapide que chercher
+    le plus proche voisin parmi tous les centres (qui serait O(n_cells)).
 
     Retourne
     --------
-    flat_indices : array (n,) - index 1D dans la grille pour chaque point,
-                  -1 si le point est hors grille
+    flat_indices : array (n,) - index 1D en ordre C, -1 si hors grille
     """
     n, d = points.shape
-    n_bins = np.array([len(e) - 1 for e in edges])   # nombre de cellules par dimension
+    n_bins = np.array([len(e) - 1 for e in edges])
 
-    # Pour chaque dimension, trouver le bin de chaque point par searchsorted
-    # searchsorted(..., side='right') - 1 donne le bin contenant x
     bin_indices = np.zeros((n, d), dtype=int)
     for dim in range(d):
         bin_indices[:, dim] = np.searchsorted(edges[dim], points[:, dim], side='right') - 1
 
-    # Masque des points dans la grille (bin valide dans toutes les dimensions)
     in_grid = np.all((bin_indices >= 0) & (bin_indices < n_bins), axis=1)
 
-    # Conversion multi-index -> index 1D en ordre C
     flat_indices = np.full(n, -1, dtype=int)
     if in_grid.any():
         flat_indices[in_grid] = np.ravel_multi_index(
-            bin_indices[in_grid].T,   # shape (d, n_valid)
+            bin_indices[in_grid].T,
             n_bins
         )
 
@@ -81,24 +94,20 @@ def compute_OT_plan(X, Y, bin_size):
     """
     Calcule le plan de transport optimal discret entre X et Y.
 
-    On ne stocke JAMAIS gamma sur la grille complete (qui peut avoir des
-    millions de cellules -> MemoryError). On travaille uniquement sur les
-    cellules non vides et on retourne les indices pour faire le lien.
-
-    La coherence est garantie par idx_X et idx_Y :
-      gamma_nz[a, b]  <->  cellules centers[idx_X[a]] et centers[idx_Y[b]]
+    On ne materialise jamais la grille complete ni gamma complet.
+    On travaille uniquement sur les cellules non vides.
 
     Retourne
     --------
-    gamma_nz : array (n_nz_X, n_nz_Y) - plan reduit aux cellules non vides
-    edges    : list de d arrays         - bords de la grille commune
-    centers  : array (n_cells, d)       - centres de toutes les cellules
-    p_X      : array (n_cells,)         - poids de X sur grille complete
-    p_Y      : array (n_cells,)         - poids de Y sur grille complete
-    idx_X    : array (n_nz_X,)          - indices complets des cellules non vides de X
-    idx_Y    : array (n_nz_Y,)          - indices complets des cellules non vides de Y
+    gamma_nz  : array (n_nz_X, n_nz_Y) - plan reduit aux cellules non vides
+    edges     : list de d arrays         - bords de la grille commune
+    centers_X : array (n_nz_X, d)        - centres des cellules non vides de X
+    centers_Y : array (n_nz_Y, d)        - centres des cellules non vides de Y
+    p_X_full  : array (n_cells,)          - poids de X sur grille complete
+    idx_X     : array (n_nz_X,)           - indices complets des cellules non vides de X
+    idx_Y     : array (n_nz_Y,)           - indices complets des cellules non vides de Y
     """
-    edges, centers = build_common_grid(X, Y, bin_size)
+    edges = build_common_grid(X, Y, bin_size)
 
     H_X, _ = np.histogramdd(X, bins=edges)
     H_Y, _ = np.histogramdd(Y, bins=edges)
@@ -115,20 +124,19 @@ def compute_OT_plan(X, Y, bin_size):
     p_X_nz = p_X[mask_X] / p_X[mask_X].sum()
     p_Y_nz = p_Y[mask_Y] / p_Y[mask_Y].sum()
 
-    # Cout quadratique uniquement entre cellules non vides
-    C = ot.dist(centers[idx_X], centers[idx_Y], metric='sqeuclidean')
+    # Centres uniquement pour les cellules non vides (pas de meshgrid global)
+    centers_X = get_centers_nz(idx_X, edges)   # (n_nz_X, d)
+    centers_Y = get_centers_nz(idx_Y, edges)   # (n_nz_Y, d)
 
-    gamma_nz = ot.emd(p_X_nz, p_Y_nz, C)   # shape (n_nz_X, n_nz_Y)
+    C = ot.dist(centers_X, centers_Y, metric='sqeuclidean')
+    gamma_nz = ot.emd(p_X_nz, p_Y_nz, C, numItermax=1_000_000)     # (n_nz_X, n_nz_Y)
 
-    return gamma_nz, edges, centers, p_X, p_Y, idx_X, idx_Y
+    return gamma_nz, edges, centers_X, centers_Y, p_X, idx_X, idx_Y
 
 
 def compute_rescaling_matrix(X0, Y0, method='diagonal'):
     """
     Calcule la matrice de rescaling D (equation 6 de Robin et al. 2019).
-
-    D adapte l'amplitude des vecteurs d'evolution v_ik (calibres sur X0->X1)
-    a l'espace des observations Y0.
 
     'diagonal' : D = diag(sigma_{Y0} / sigma_{X0})
     'cholesky' : D = Cho(Sigma_{Y0}) . Cho(Sigma_{X0})^{-1}
@@ -166,50 +174,42 @@ def OTC(X, Y, bin_size):
     Optimal Transport Correction - correction stationnaire.
 
     Pour chaque point X_l :
-      1. Trouver la cellule i via assign_cells (O(d), rapide).
-      2. Retrouver la position de i dans idx_X via searchsorted.
-      3. Tirer aleatoirement une cellule destination j selon la loi
-         conditionnelle gamma_nz[pos, :].
-      4. Tirer uniformement un point dans la cellule j -> Z_l.
+      1. Trouver sa cellule i via assign_cells (O(d)).
+      2. Retrouver sa position dans gamma_nz via searchsorted sur idx_X.
+      3. Tirer une cellule destination j selon la loi conditionnelle.
+      4. Tirer uniformement un point dans la cellule j.
 
     Retourne
     --------
-    Z : array (n, d) - X corrige dont la distribution approche celle de Y
+    Z : array (n, d)
     """
     d = X.shape[1]
 
-    gamma_nz, edges, centers, p_X, p_Y, idx_X, idx_Y = compute_OT_plan(X, Y, bin_size)
+    gamma_nz, edges, centers_X, centers_Y, p_X, idx_X, idx_Y = \
+        compute_OT_plan(X, Y, bin_size)
 
-    # Assigner chaque point de X a sa cellule (O(d) par point)
-    cell_indices = assign_cells(X, edges)   # shape (n,), -1 si hors grille
+    cell_indices = assign_cells(X, edges)
 
     Z = np.zeros_like(X)
 
     for l in range(len(X)):
-        i = cell_indices[l]   # index complet de la cellule de X[l]
-
-        # Position de i dans idx_X (idx_X est trie par np.where)
+        i = cell_indices[l]
         pos = np.searchsorted(idx_X, i)
 
         if i >= 0 and pos < len(idx_X) and idx_X[pos] == i:
-            probs = gamma_nz[pos, :]       # loi conditionnelle sur n_nz_Y cellules
+            probs = gamma_nz[pos, :]
             total = probs.sum()
 
             if total < 1e-10:
                 Z[l] = X[l]
                 continue
 
-            probs = probs / total          # renormalisation de securite
+            probs = probs / total
 
-            # Tirage de la cellule destination parmi les cellules non vides de Y
             j_nz = np.random.choice(len(idx_Y), p=probs)
-            j = idx_Y[j_nz]               # index complet dans centers
-
-            # Point uniforme dans la cellule j
-            Z[l] = centers[j] + np.random.uniform(-bin_size / 2, bin_size / 2, size=d)
+            Z[l] = centers_Y[j_nz] + np.random.uniform(-bin_size / 2, bin_size / 2, size=d)
 
         else:
-            # Hors grille ou cellule vide : conserver le point
             Z[l] = X[l]
 
     return Z
@@ -220,21 +220,15 @@ def OTC(X, Y, bin_size):
 # avec modification : nearest neighbor au lieu du plan gamma(Y0 -> X0)
 # ==============================================================================
 
-def dOTC_simplified(X0, X1, Y0, bin_size=0.2, rescaling='diagonal'):
+def dOTC_simplified(X0, X1, Y0, bin_size=0.5, rescaling='diagonal'):
     """
     Dynamical Optimal Transport Correction (version simplifiee).
 
     Implemente l'algorithme dOTC de Robin et al. (2019) avec la modification :
-    nearest neighbor pour associer chaque y0 a une cellule de X0
-    (au lieu du plan de transport gamma entre Y0 et X0).
+    nearest neighbor pour associer chaque y0 a une cellule de X0.
 
-    Schema (Figure 2 du papier) :
-
-        X0  --phi-->  X1
-        |                  | OTC
-        NN                 v
-        v
-        Y0  --phi_tilde-->  Y1 (estime)
+    Note : attend des donnees deja normalisees. Utiliser dOTC_df() qui
+    gere la normalisation et la denormalisation automatiquement.
 
     Etapes
     ------
@@ -251,37 +245,36 @@ def dOTC_simplified(X0, X1, Y0, bin_size=0.2, rescaling='diagonal'):
     Z1           : array (n_x1, d)
     """
     n, d = X0.shape
-    n_y = Y0.shape[0]   # peut differer de n
+    n_y = Y0.shape[0]
 
     # =========================================================================
     # ETAPE 1 : Plan phi entre X0 et X1
     # =========================================================================
-    gamma_nz, edges_phi, centers_phi, p_X0_phi, p_X1_phi, idx_X0, idx_X1 = \
+    gamma_nz, edges_phi, centers_X0_nz, centers_X1_nz, p_X0_phi, idx_X0, idx_X1 = \
         compute_OT_plan(X0, X1, bin_size)
 
     # =========================================================================
     # ETAPE 2 : Vecteurs d'evolution v_ik
     #
-    # v_dict[i] = liste de (v_ik, w_ik) pour toutes les cellules k de X1
-    # vers lesquelles la cellule i de X0 transporte.
-    # Cle = index COMPLET i (dans centers_phi), coherent avec assign_cells.
+    # v_dict[a] = liste de (v_ik, w_ik) pour la cellule a (position dans
+    # gamma_nz). On indexe par 'a' (position reduite) et non par 'i'
+    # (index complet), car on retrouvera 'a' par searchsorted a l'etape 4.
     # =========================================================================
     v_dict = {}
 
-    for a, i in enumerate(idx_X0):
-        bs = np.where(gamma_nz[a, :] > 1e-10)[0]   # cellules X1 non nulles
+    for a in range(len(idx_X0)):
+        bs = np.where(gamma_nz[a, :] > 1e-10)[0]
 
         if len(bs) == 0:
             continue
 
         transports = []
         for b in bs:
-            k = idx_X1[b]
-            v_ik = centers_phi[k] - centers_phi[i]       # vecteur de deplacement
-            w_ik = gamma_nz[a, b] / p_X0_phi[i]          # poids conditionnel
+            v_ik = centers_X1_nz[b] - centers_X0_nz[a]       # vecteur de deplacement
+            w_ik = gamma_nz[a, b] / p_X0_phi[idx_X0[a]]       # poids conditionnel
             transports.append((v_ik, w_ik))
 
-        v_dict[i] = transports
+        v_dict[a] = transports
 
     # =========================================================================
     # ETAPE 3 : Matrice de rescaling D
@@ -291,12 +284,10 @@ def dOTC_simplified(X0, X1, Y0, bin_size=0.2, rescaling='diagonal'):
     # =========================================================================
     # ETAPE 4 : Estimation de Y1
     #
-    # a) Nearest neighbor par blocs : pour chaque y0, trouver le x0 le plus
-    #    proche. Calcul par blocs pour eviter un tableau (n_y x n) en memoire.
-    #
-    # b) Assigner les x0_nn a leur cellule via assign_cells (O(d), rapide).
-    #
-    # c) Calculer le deplacement moyen pondere et deplacer y0.
+    # a) Nearest neighbor par blocs (evite un tableau n_y x n en memoire).
+    # b) Assigner les x0_nn a leur cellule via assign_cells (O(d)).
+    # c) Retrouver la position 'a' dans gamma_nz par searchsorted.
+    # d) Calculer le deplacement moyen et deplacer y0.
     # =========================================================================
     Y1_estimated = np.zeros((n_y, d))
 
@@ -306,31 +297,30 @@ def dOTC_simplified(X0, X1, Y0, bin_size=0.2, rescaling='diagonal'):
 
     for start in range(0, n_y, block_size):
         end = min(start + block_size, n_y)
-        block = Y0[start:end]                             # (taille_bloc, d)
+        block = Y0[start:end]
         dists = np.linalg.norm(
             block[:, np.newaxis, :] - X0[np.newaxis, :, :],
             axis=2
-        )                                                 # (taille_bloc, n)
+        )
         nn_indices[start:end] = np.argmin(dists, axis=1)
 
-    # b) Cellules des x0 nearest neighbors (O(d) par point)
-    x0_nns = X0[nn_indices]                               # (n_y, d)
-    cell_indices_nn = assign_cells(x0_nns, edges_phi)     # (n_y,)
+    # b) Cellules des x0 nearest neighbors
+    x0_nns = X0[nn_indices]
+    cell_indices_nn = assign_cells(x0_nns, edges_phi)
 
-    # c) Deplacement
+    # c) et d) Deplacement
     for l in range(n_y):
-        i = cell_indices_nn[l]   # index complet de la cellule du x0 le plus proche
+        i = cell_indices_nn[l]
+        pos = np.searchsorted(idx_X0, i)
 
-        if i >= 0 and i in v_dict:
-            # Deplacement moyen pondere = esperance de v sous loi conditionnelle phi_i
+        if i >= 0 and pos < len(idx_X0) and idx_X0[pos] == i and pos in v_dict:
             v_mean = np.zeros(d)
-            for v_ik, w_ik in v_dict[i]:
+            for v_ik, w_ik in v_dict[pos]:
                 v_mean += w_ik * v_ik
 
             Y1_estimated[l] = Y0[l] + D @ v_mean
 
         else:
-            # Cellule hors grille ou sans transport : pas de deplacement
             Y1_estimated[l] = Y0[l]
 
     # =========================================================================
@@ -342,28 +332,67 @@ def dOTC_simplified(X0, X1, Y0, bin_size=0.2, rescaling='diagonal'):
 
 
 # ==============================================================================
-# WRAPPER DATAFRAME
+# WRAPPER DATAFRAME AVEC NORMALISATION
 # ==============================================================================
 
-def dOTC_df(X0, X1, Y0, bin_size=0.2, rescaling='diagonal'):
+def dOTC_df(X0, X1, Y0, bin_size=0.5, rescaling='diagonal'):
     """
-    Wrapper de dOTC_simplified acceptant et retournant des DataFrames pandas.
+    Wrapper de dOTC_simplified avec normalisation z-score automatique.
 
-    Les noms de colonnes de X0 sont conserves dans les sorties.
+    Recommande pour des donnees climatiques multivariees aux echelles
+    tres differentes (ex: temperature ~[-20,40], radiation ~[0,500]).
+
+    La normalisation est apprise sur X0 (periode de calibration du modele)
+    et appliquee a X0, X1 et Y0 avant dOTC. Les sorties sont
+    denormalisees avec les memes parametres avant d'etre retournees.
+
+    Pourquoi normaliser sur X0 ?
+    - X0 est la reference du modele en calibration.
+    - Appliquer la meme transformation a X1 et Y0 preserve les ecarts
+      relatifs entre periodes, ce que dOTC cherche a capturer.
 
     Parametres
     ----------
     X0, X1, Y0 : DataFrames pandas
-    bin_size    : float
+    bin_size    : float (defaut=0.5, adapte aux donnees normalisees ~[-3,3])
     rescaling   : 'diagonal' ou 'cholesky'
 
     Retourne
     --------
-    Y1_estimated : DataFrame
-    Z1           : DataFrame
+    Y1_estimated : DataFrame - en unites originales (denormalisees)
+    Z1           : DataFrame - en unites originales (denormalisees)
     """
     cols = X0.columns
-    Y1_est, Z1 = dOTC_simplified(
-        X0.values, X1.values, Y0.values, bin_size, rescaling
-    )
+
+    # Apprentissage du scaler sur X0 uniquement
+    scaler = StandardScaler().fit(X0.values)
+
+    # Normalisation des trois jeux de donnees
+    X0_n = scaler.transform(X0.values)
+    X1_n = scaler.transform(X1.values)
+    Y0_n = scaler.transform(Y0.values)
+
+    # dOTC dans l'espace normalise
+    Y1_est_n, Z1_n = dOTC_simplified(X0_n, X1_n, Y0_n, bin_size, rescaling)
+
+    # Denormalisation : retour aux unites originales
+    Y1_est = scaler.inverse_transform(Y1_est_n)
+    Z1     = scaler.inverse_transform(Z1_n)
+
     return pd.DataFrame(Y1_est, columns=cols), pd.DataFrame(Z1, columns=cols)
+
+
+# ==============================================================================
+# UTILITAIRE DE DIAGNOSTIC
+# ==============================================================================
+
+def grid_size_estimate(X, Y, bin_size):
+    """
+    Affiche le nombre de bins par dimension et le nombre total de cellules
+    pour un bin_size donne. Utile pour choisir bin_size avant de lancer dOTC.
+    """
+    mins = np.minimum(X.min(axis=0), Y.min(axis=0)) - bin_size
+    maxs = np.maximum(X.max(axis=0), Y.max(axis=0)) + bin_size
+    n_bins = np.ceil((maxs - mins) / bin_size).astype(int)
+    print(f"Bins par dimension : {n_bins.tolist()}")
+    print(f"Nombre total de cellules : {np.prod(n_bins):,.0f}")
