@@ -36,10 +36,8 @@ def csv_to_pd_univ(filepath, mois, var, years=None):
     # Lire le CSV avec ; et parser la colonne date
     df = pd.read_csv(filepath, sep=';', parse_dates=['date'])
 
-    # --- MODIFICATION (Point 0) : Moyenne journalière ---
     # On groupe par jour pour passer de données horaires à journalières
     df = df.groupby(df['date'].dt.floor("D"))[var].mean().reset_index()
-    # ----------------------------------------------------
 
     # Filtrer sur le mois
     df = df[df['date'].dt.month == mois]
