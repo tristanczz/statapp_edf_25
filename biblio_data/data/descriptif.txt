@@ -1,0 +1,18 @@
+Un fichier csv par couple modèle (CMIP5, eurocordex, CMIP6) / période, et un fichier pour les observations. Au niveau de la station de Genève.
+Ce sont des données extraites par interpolation bilinéaire sur les grilles des modèles climatiques, à un pas de temps journalier
+La période historique pour CMIP5 et EUROCORDEX va jusqu'à fin 2005, pour CMIP6 jusqu'à fin 2014
+
+Il y a les variables
+- tas: température au sol, en degré celcius
+- uas et vas: composantes du vecteur vent
+- sfcWind = np.sqrt(uas**2 + vas**2): vitesse du vent
+- rsds:  radiations ondes courtes en W/m^{2}
+- rlds : radiations ondes longues en W/m^{2}
+- hurs : humidité relative en % (fonction pour passer de hurs à huss dans utils_data.py)
+- huss: humidité spécifique g/kg
+Pour les obs, pour obtenir sfcWind et hurs, faire la conversion sur les données horaires : puis ensuite faire des moyennes journalières. 
+
+
+
+
+

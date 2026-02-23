@@ -1,0 +1,20 @@
+Papier d'application aux données climatiques 
+- Michelangeli et al (CDF-t)
+- Robin et al (méthode dOTC par transport optimal)
+- Dekens et Al (Rosenblatt)
+- Vrac et al : backtesting en modèle parfait
+- Tantet et Tankov : intéressant car lexique sur les modèles climatiques
+
+Introduction au transport optimal
+Regarder l'intro de la thèse de Paty qui est bien faire
+Pour les aspects numériques, il y a le cours de Cuturi et Peyre
+Pour les aspects statistiques, il y a le Chewi
+Il y a aussi le livre de Villani pour aller plus dans les détails
+
+Sur la transformée de Rosenblatt et Nataf 
+Lebrun et Dutfoy
+
+Sur les liens entre Rosenblatt et transport optimal
+DeLara et al qui parle de manière générale des transformations pour aller d'une distribution à une autre
+Carlier et Al
+
