@@ -3,8 +3,7 @@ import numpy as np
 from statsmodels.distributions.empirical_distribution import ECDF
 import matplotlib.pyplot as plt
 import seaborn as sns
-import ot  # Python Optimal Transport
-from scipy.spatial.distance import cdist
+
 
 def csv_to_pd(filepath, mois=None, var=None, years=None):
     """
@@ -218,94 +217,92 @@ def comparer_distributions_univ(dis1, dis2):
 
 
 
-def transport_optimal_uniforme(X0, X1, Y0, method='emd', reg=0.01):
-    """
-    Transport optimal avec poids UNIFORMES (hypothèse i.i.d., pas forcément pertinent)
-    
-    Paramètres:
-    -----------
-    X0 : array (n0, d)
-        distribution de départ
-    X1 : array (n1, d)
-        distribution cible
-    Y0 : array (m, d)
-        modèle préictif à transporter
-    method : str, default='emd'
-        'emd' pour transport exact (lent, sparse)
-        'sinkhorn' pour transport régularisé (rapide, moins sparse)
-    reg : float, default=0.01
-        Paramètre de régularisation pour sinkhorn 
-        
-    Returns:
-    --------
-    Y1 : array (m, d)
-        Points Y0 transportés vers la distribution de X1
-    info : dict
-        Dictionnaire contenant:
-        - 'T_matrix': matrice de transport (n0, n1)
-        - 'mapping': array (n0,) indices de correspondance X0 → X1
-        - 'cost': coût total du transport
-        - 'weights_source': poids a utilisés
-        - 'weights_target': poids b utilisés
-    """
-    
-    
-    
-    
-    n0, d = X0.shape
-    n1 = X1.shape[0]
-    m = Y0.shape[0]
-    
-    
-  
-    a = np.ones(n0) / n0  
-    b = np.ones(n1) / n1  # poids uniformes
-    
-    
+"""
+def plot_distributions_univ_norm(norm_model, norm_obs, nom_modele, mois, var):
 
-
-    M = ot.dist(X0, X1, metric='euclidean')
-
-    
-    if method == 'emd':
-        T_matrix = ot.emd(a, b, M)
-        method_name = "EMD (exact)"
-    elif method == 'sinkhorn':
-        T_matrix = ot.sinkhorn(a, b, M, reg)
-        method_name = f"Sinkhorn (reg={reg})"
-    
-    
-    
-    cost = np.sum(T_matrix * M)
-    
-    
-    nnz = np.sum(T_matrix > 1e-10)
-    sparsity = 1 - (nnz / T_matrix.size)
-    
-    
-    mapping = np.argmax(T_matrix, axis=1)
-    
-    
-    
-    # pour chaque Y0[i] trouver le plus proche voisin dans X0
-    distances = cdist(Y0, X0, metric='euclidean')
-    nearest_in_X0 = np.argmin(distances, axis=1)  
-    
-    # appliquer le mapping
-    indices_Y1 = mapping[nearest_in_X0]
-    Y1 = X1[indices_Y1]
-    
-    
-    # infos
-    info = {
-        'T_matrix': T_matrix,
-        'mapping': mapping,
-        'cost': cost,
-        'weights_source': a,
-        'weights_target': b,
-        'nearest_in_X0': nearest_in_X0,
-        'method': method,
-        'sparsity': sparsity
+    # Noms des mois
+    mois_noms = {
+        1: "Janvier", 2: "Février", 3: "Mars", 4: "Avril",
+        5: "Mai", 6: "Juin", 7: "Juillet", 8: "Août",
+        9: "Septembre", 10: "Octobre", 11: "Novembre", 12: "Décembre"
     }
+
+    # Décomposer les paramètres
+    mean_model, std_model = norm_model
+    mean_obs, std_obs = norm_obs
+
+    # Créer une plage de valeurs pour tracer les courbes
+    x_min = min(mean_model - 4*std_model, mean_obs - 4*std_obs)
+    x_max = max(mean_model + 4*std_model, mean_obs + 4*std_obs)
+    x = np.linspace(x_min, x_max, 1000)
+
+    # Calculer les densités
+    y_model = norm.pdf(x, mean_model, std_model)
+    y_obs = norm.pdf(x, mean_obs, std_obs)
+
+    # Configurer le style
+    sns.set_style("whitegrid")
+    plt.figure(figsize=(10, 6))
+
+    # Tracer les courbes
+    plt.plot(x, y_model, linewidth=2.5, color='#e74c3c', alpha=0.8,
+             label=f'Modèle: μ={mean_model:.2f}, σ={std_model:.2f}')
+    plt.plot(x, y_obs, linewidth=2.5, color='#3498db', alpha=0.8,
+             label=f'Corrigé: μ={mean_obs:.2f}, σ={std_obs:.2f}')
+
+    # Ajouter des zones ombrées sous les courbes
+    plt.fill_between(x, y_model, alpha=0.2, color='#e74c3c')
+    plt.fill_between(x, y_obs, alpha=0.2, color='#3498db')
+
+    # Labels et titre
+    plt.xlabel('Valeur', fontsize=12)
+    plt.ylabel('Densité de probabilité', fontsize=12)
+    plt.title(f'Correction du modèle {nom_modele} pour {var} et {mois_noms[mois]}', 
+              fontsize=14, fontweight='bold')
+    plt.legend(fontsize=11, loc='best')
+    plt.grid(alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def extract_month_data(csv_path, month, columns=None, years=None):
     
-    return Y1, info
+    
+    if not 1 <= month <= 12:
+        raise ValueError(f"Le mois doit être entre 1 et 12, reçu: {month}")
+    
+    if years is not None and (not isinstance(years, tuple) or len(years) != 2):
+        raise ValueError(f"years doit être un tuple de 2 éléments (année_début, année_fin)")
+    
+    df = pd.read_csv(csv_path, sep=';')
+    date_col = df.columns[0]
+    
+    # Conversion flexible pour gérer différents formats de date
+    df[date_col] = pd.to_datetime(df[date_col])
+    
+    # Filtrer par mois
+    df_filtered = df[df[date_col].dt.month == month]
+    
+    # Filtrer par période d'années si spécifié
+    if years is not None:
+        year_start, year_end = years
+        df_filtered = df_filtered[
+            (df_filtered[date_col].dt.year >= year_start) & 
+            (df_filtered[date_col].dt.year <= year_end)
+        ]
+    
+    if len(df_filtered) == 0:
+        period_str = f" pour la période {years[0]}-{years[1]}" if years else ""
+        raise ValueError(f"Aucune donnée trouvée pour le mois {month}{period_str}")
+    
+    # Si des colonnes spécifiques sont demandées
+    if columns is not None:
+        data = df_filtered[columns].values
+    else:
+        data = df_filtered.iloc[:, 1:].values
+    
+    period_info = f" ({years[0]}-{years[1]})" if years else ""
+    print(f"Données extraites de {csv_path}: {len(data)} lignes, {data.shape[1]} variables pour le mois {month}{period_info}")
+    
+    return data"""
