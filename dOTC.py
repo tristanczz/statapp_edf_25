@@ -141,8 +141,8 @@ def compute_rescaling_matrix(X0, Y0, method='diagonal'):
     'diagonal' : D = diag(sigma_{Y0} / sigma_{X0})
     'cholesky' : D = Cho(Sigma_{Y0}) . Cho(Sigma_{X0})^{-1}
     """
-    S_X0 = np.cov(X0.T)
-    S_Y0 = np.cov(Y0.T)
+    S_X0 = np.atleast_2d(np.cov(X0.T))
+    S_Y0 = np.atleast_2d(np.cov(Y0.T))
 
     if method == 'diagonal':
         s_X0 = np.sqrt(np.diag(S_X0))
