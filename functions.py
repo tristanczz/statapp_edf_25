@@ -7,6 +7,7 @@ from scipy.stats import ks_2samp
 import ot
 from sklearn.preprocessing import StandardScaler
 from typing import List, Tuple
+from scipy.stats import spearmanr
 
 
 def csv_to_pd_univ(filepath, mois, var, years=None):
@@ -504,3 +505,91 @@ def compare_joint_distributions(df1: pd.DataFrame,
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.show()
+
+
+def frobenius_spearman_diff(df1: pd.DataFrame, df2: pd.DataFrame) -> float:
+    """
+    Calcule la norme de Frobenius de la différence des matrices de corrélation
+    de Spearman de deux DataFrames.
+
+    Args:
+        df1: Premier DataFrame
+        df2: Deuxième DataFrame (mêmes colonnes que df1)
+
+    Returns:
+        La norme de Frobenius de (corr_spearman(df1) - corr_spearman(df2))
+    """
+    if list(df1.columns) != list(df2.columns):
+        raise ValueError("Les deux DataFrames doivent avoir les mêmes colonnes.")
+
+    corr1 = df1.corr(method="spearman").values
+    corr2 = df2.corr(method="spearman").values
+
+    diff = corr1 - corr2
+
+    return np.linalg.norm(diff, ord="fro")
+
+
+def compare_spearman_frobenius(
+    df: pd.DataFrame,
+    candidates: tuple[tuple[pd.DataFrame, str], ...]
+) -> pd.DataFrame:
+    """
+    Compare df à 4 DataFrames via la norme de Frobenius de la différence
+    des matrices de corrélation de Spearman.
+
+    Args:
+        df:         DataFrame de référence
+        candidates: Tuple de 4 couples (DataFrame, titre)
+
+    Returns:
+        DataFrame avec colonnes ["Titre", "Norme de Frobenius"]
+    """
+    if len(candidates) != 4:
+        raise ValueError("Le tuple doit contenir exactement 4 couples (DataFrame, titre).")
+
+    results = [
+        {"Modèle/Correction": titre, "Norme de Frobenius": frobenius_spearman_diff(df, df_candidate)}
+        for df_candidate, titre in candidates
+    ]
+
+    return pd.DataFrame(results)
+
+
+def compare_distributions(
+    df: pd.DataFrame,
+    candidates: tuple[tuple[pd.DataFrame, str], ...]
+) -> pd.DataFrame:
+    """
+    Compare variable par variable les distributions de df avec chaque DataFrame candidat.
+
+    Args:
+        df:         DataFrame de référence
+        candidates: Tuple de 4 couples (DataFrame, titre)
+
+    Returns:
+        Un seul DataFrame concaténé avec pour chaque (candidat x variable) :
+        - Titre du dataframe candidat
+        - Variable
+        - Différence des espérances (mean_df - mean_candidate)
+        - Rapport des variances (var_df / var_candidate)
+        - p-value du test de Kolmogorov-Smirnov
+    """
+    from scipy.stats import ks_2samp
+
+    if len(candidates) != 4:
+        raise ValueError("Le tuple doit contenir exactement 4 couples (DataFrame, titre).")
+
+    rows = [
+        {
+            "Modèle/Correction":                 titre,
+            "Variable":              col,
+            "Diff. espérances":      df[col].mean() - df_candidate[col].mean(),
+            "Rapport des variances": df[col].var() / df_candidate[col].var(),
+            "KS p-value":            ks_2samp(df[col].dropna(), df_candidate[col].dropna()).pvalue,
+        }
+        for df_candidate, titre in candidates
+        for col in df.columns
+    ]
+
+    return pd.DataFrame(rows).reset_index(drop=True)
