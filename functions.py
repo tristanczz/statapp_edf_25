@@ -352,11 +352,11 @@ def gaussian_ot(modele_hist, obs_hist, modele_futur):
     Y0_scaled = scaler_obs.fit_transform(Y0)
 
     # Estimation du transport linéaire gaussien
-    mu_X0 = X0_scaled.mean(axis=0)
-    mu_X1 = X1_scaled.mean(axis=0)
+    cov_X0 = np.atleast_2d(np.cov(X0_scaled.T))
+    cov_X1 = np.atleast_2d(np.cov(X1_scaled.T))
 
-    cov_X0 = np.cov(X0_scaled.T)
-    cov_X1 = np.cov(X1_scaled.T)
+    mu_X0 = np.atleast_1d(X0_scaled.mean(axis=0))
+    mu_X1 = np.atleast_1d(X1_scaled.mean(axis=0))
 
     A, b = ot.gaussian.bures_wasserstein_mapping(mu_X0, mu_X1, cov_X0, cov_X1)
 
