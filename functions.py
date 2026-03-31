@@ -584,7 +584,7 @@ def compare_distributions(
         {
             "Modèle/Correction":                 titre,
             "Variable":              col,
-            "Diff. espérances":      df[col].mean() - df_candidate[col].mean(),
+            "Diff. espérances":      np.abs(df[col].mean() - df_candidate[col].mean()),
             "Rapport des variances": df[col].var() / df_candidate[col].var(),
             "KS p-value":            ks_2samp(df[col].dropna(), df_candidate[col].dropna()).pvalue,
         }
