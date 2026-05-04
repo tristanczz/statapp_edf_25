@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import functions; print\\('OK'\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(python3 -)",
+      "Bash(python)",
+      "Bash(grep -n \"\\\\\\\\\\\\\\\\section\\\\|\\\\\\\\\\\\\\\\subsection\\\\|\\\\\\\\\\\\\\\\subsubsection\\\\|\\\\\\\\\\\\\\\\nouveau\\\\|\\\\\\\\\\\\\\\\modifie\\\\|\\\\\\\\\\\\\\\\added\" \"c:/Users/gmass/Desktop/COURS_ENSAE/2A/statapp/statapp_edf_25/rapport_latex.txt\")"
+    ]
+  }
+}

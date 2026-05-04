@@ -1,0 +1,1678 @@
+\documentclass[12pt, a4paper]{article}
+
+% Encodage et police
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{mathptmx}
+
+% Mise en page
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+
+% Interligne
+\usepackage{setspace}
+\onehalfspacing
+
+% Couleurs et graphiques
+\usepackage[table]{xcolor}
+\usepackage{colortbl}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{float}
+\usepackage{multirow}
+
+% Français
+\usepackage[french]{babel}
+
+% Divers
+\usepackage{tikz}
+\usepackage{fancyhdr}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{appendix}
+\setcounter{tocdepth}{2}
+\usepackage{amsmath}
+\usepackage{amsfonts}   % ← pour \mathbb
+\usepackage{dsfont}
+\usepackage{amssymb} 
+\usepackage{cleveref}
+\usepackage{comment}
+\usepackage{rotating}   % sidewaysfigure pour figures paysage
+
+% Marquage désactivé (couleurs supprimées)
+\newcommand{\added}[1]{#1}
+\newcommand{\nouveau}[1]{#1}
+\newcommand{\modifie}[1]{#1}
+
+% Titres TOC en gras, suppression espace vertical avant
+\usepackage{tocloft}
+\renewcommand{\cfttoctitlefont}{\large\bfseries}
+\renewcommand{\cftloftitlefont}{\large\bfseries}
+\setlength{\cftbeforetoctitleskip}{0pt}
+\setlength{\cftbeforeloftitleskip}{0pt}
+
+% Couleurs ENSAE
+\definecolor{ensaered}{RGB}{205, 32, 44}
+
+\begin{document}
+
+% ── PAGE DE GARDE ─────────────────────────────────────────────
+\thispagestyle{empty}
+
+% En-tête : logo ENSAE à gauche, logo EDF à droite
+\begin{minipage}[c]{0.5\textwidth}
+    \includegraphics[width=3cm]{logo_ensae.png}
+\end{minipage}
+\hfill
+\begin{minipage}[c]{0.4\textwidth}
+    \raggedleft
+    \includegraphics[width=3cm]{logo_EDF.png}
+\end{minipage}
+
+\vspace{0.5cm}
+
+% Noms et formation
+\begin{minipage}[t]{0.5\textwidth}
+    \textbf{\large Samuel Romano}\\[0.35cm]
+    \textbf{\large Tristan Czarnecki}\\[0.35cm]
+    \textbf{\large Gilles Massoulié}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.4\textwidth}
+    \raggedleft
+    \textbf{\Large ENSAE 2\textsuperscript{e} année}\\[0.25cm]
+    \textit{\large 2025-2026}\\[0.35cm]
+    \textit{\large Projet de statistique et\\science des données appliquées}
+\end{minipage}
+
+\vspace{2cm}
+
+% Titre dans un cadre
+\begin{center}
+\fbox{%
+    \begin{minipage}{0.95\textwidth}
+        \centering
+        \vspace{1.2cm}
+        {\textbf{\Huge Correction de biais multivariée}}\\[0.6cm]
+        {\textbf{\Huge pour les modèles climatiques}}
+        \vspace{1.2cm}
+    \end{minipage}%
+}
+\end{center}
+
+\vspace{3cm}
+
+% Entreprise et encadrant
+\begin{minipage}[t]{0.45\textwidth}
+    \textbf{\large EDF Innovation Lab}\\[0.2cm]
+    \textbf{\large Palaiseau}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.45\textwidth}
+    \raggedleft
+    \textbf{\large Encadrant entreprise : \\ Thomas Deschatre}
+\end{minipage}
+
+\vspace{3cm}
+
+% Pied de page ENSAE
+\begin{flushleft}
+{\small
+    \textbf{ENSAE Paris} \hfill \textcolor{ensaered}{\textbf{www.ensae.fr}}\\
+    \textbf{5, avenue Henry Le Chatelier -- 91120 PALAISEAU -- FRANCE}
+}
+\end{flushleft}
+
+% ── TABLE DES MATIÈRES ────────────────────────────────────────
+\newpage
+\newgeometry{top=3cm, bottom=3cm, left=3cm, right=3cm}
+
+\renewcommand{\contentsname}{\textbf{Table des matières}}
+\tableofcontents
+\newpage
+
+% ── CORPS DU RAPPORT ──────────────────────────────────────────
+\section*{Introduction}
+\addcontentsline{toc}{section}{Introduction}
+
+
+Dans un contexte industriel et opérationnel, notamment à EDF, la
+conception d'infrastructures énergétiques (centrales, barrages, parcs
+éoliens) nécessite des projections climatiques fiables à des échelles
+spatiales fines, adaptées à des études locales. Or, les modèles climatiques
+globaux, tels que ceux utilisés dans notre projet (CMIP5 et CMIP6), 
+indispensables pour simuler l'évolution du climat à long terme, présentent
+une résolution spatiale trop grossière, de l'ordre de 100~km. À cette
+échelle, ils ne permettent pas de représenter correctement les phénomènes
+locaux et introduisent des biais systématiques par rapport aux observations,
+notamment en termes de moyennes, de variabilité et de valeurs extrêmes. Les modèles climatiques régionaux à haute résolution (RCM ; nous
+utilisons EURO-CORDEX) fournissent des simulations plus réalistes à
+l'échelle locale, mais leur coût de calcul et leur disponibilité limitent
+leur usage opérationnel. Ces modèles présentent aussi des biais qu'il est nécessaire de corriger.
+
+\vspace{0.2cm}
+
+
+L'enjeu est donc d'améliorer les projections fournies par les modèles
+climatiques pour obtenir des informations exploitables à des échelles
+locales. La correction de biais vise à établir un lien statistique entre les
+sorties d'un modèle climatique et une référence locale (observations ou
+modèle régional) sur une période historique, puis à appliquer cette
+correction aux projections futures, dans une logique de downscaling
+statistique.
+\vspace{0.2cm}
+
+La méthode CDF-t (\textit{Cumulative Distribution Function Transform}),
+proposée par Michelangeli et al. \cite{michelangeli2009} et largement utilisée à EDF, constitue
+le point de départ de ce projet. Elle repose sur l'apprentissage d'une
+transformation statistique entre les fonctions de répartition du modèle et
+celles de la référence sur une période de calibration, transformation
+ensuite appliquée aux projections futures tout en conservant le signal de
+changement climatique. Toutefois, CDF-t est une méthode univariée : chaque
+variable est corrigée indépendamment, sans prise en compte des structures de
+dépendance entre variables - corrélations inter-variables ou cohérences
+spatiales entre stations.
+\vspace{0.2cm}
+
+L'objectif de ce projet est donc l'implémentation et l'évaluation de
+méthodes de correction de biais multivariées, capables de corriger
+simultanément plusieurs variables climatiques tout en préservant leurs
+dépendances. Pour cela, nous étudions \modifie{trois} approches. La
+première est dOTC (\textit{Dynamical Optimal Transport Correction}), proposée
+par \cite{robin2019}, qui reformule la correction de biais dans le cadre du
+transport optimal multivarié et traite conjointement toutes les variables en
+minimisant un coût de transport quadratique entre les distributions. La
+seconde est une formulation analytique du transport optimal restreinte au cas
+gaussien, qui exploite l'existence d'une solution explicite lorsque les distributions sont supposées gaussiennes, offrant ainsi
+une alternative numériquement efficace à dOTC. \nouveau{La troisième, le pont de
+Schrödinger, est une régularisation entropique du transport optimal qui remplace
+l'affectation dure de dOTC par une projection barycentrique douce, obtenue via
+l'algorithme de Sinkhorn--Knopp. Elle combine les avantages de dOTC (correction
+multivariée) et d'une meilleure stabilité numérique, au prix d'un hyperparamètre
+de régularisation $\varepsilon$ à calibrer.}
+
+\newpage
+
+\section{Revue de littérature}
+
+Pour réaliser notre projet, nous nous sommes appuyés sur les articles suivants.
+
+\vspace{0.2cm}
+
+Tantet et Tankov \cite{tantet2019} fournissent une introduction aux différentes sources de
+données climatiques et distinguent notamment le \textit{downscaling
+dynamique}, qui consiste à forcer un modèle régional par les sorties d'un
+modèle global, et le \textit{downscaling statistique}, qui établit une
+relation statistique entre sorties du modèle et référence locale sur une
+période historique pour l'appliquer ensuite aux projections futures. C'est
+dans cette seconde catégorie que se situent les méthodes que nous étudions.
+
+\vspace{0.2cm}
+
+ Michelangeli et al. \cite{michelangeli2009} propose la méthode CDF-t, qui étend le quantile
+mapping en supposant l'existence d'une transformation stable dans le temps
+reliant la distribution du modèle à celle des observations, permettant
+d'estimer la distribution future corrigée à partir des trois distributions
+connues $F_{X_0}$, $F_{X_1}$ et $F_{Y_0}$. Vrac et al. \cite{vrac2025} confirment, via
+une expérience en modèle parfait utilisant des simulations EURO-CORDEX comme
+pseudo-observations, que le quantile mapping classique échoue à reproduire
+le signal de changement climatique sur la période future tandis que CDF-t
+maintient des biais proches de zéro sur les moyennes et les valeurs
+extrêmes. Nous nous sommes inspirés de ce protocole pour nos validations, en
+distinguant une période de calibration et une période de projection, et en
+évaluant les méthodes sur des critères marginaux, extrêmes et multivariés.
+
+\vspace{0.2cm}
+
+Pour pallier la limite univariée de CDF-t, qui ne préserve pas les
+structures de dépendance entre variables, Robin et al. \cite{robin2019} reformulent la
+correction de biais dans le cadre du transport optimal multivarié et
+développent OTC (\textit{Optimal Transport Correction}) pour le cas
+stationnaire et dOTC (\textit{Dynamical OTC}) pour le cas non-stationnaire.
+Nous avons implémenté ces deux méthodes en suivant leur méthodologie.
+L'introduction de la thèse de Paty \cite{paty2021} nous a permis d'avoir une compréhension générale du problème du transport optimal et nous a fourni les résultats analytiques
+du transport optimal dans le cas gaussien - expression explicite de la
+distance de Wasserstein-2 et carte de Monge - sur lesquels repose notre
+troisième méthode de correction, le transport linéaire gaussien.
+
+\vspace{0.2cm}
+
+Enfin, Léonard \cite{leonard2014} établit le lien formel entre le problème de Schrödinger
+(1931) et la régularisation entropique du transport optimal. Ce travail montre que
+minimiser un coût de transport sous contrainte de divergence de Kullback-Leibler par
+rapport à un prior brownien admet une solution tensorisée calculable par l'algorithme
+de Sinkhorn--Knopp \cite{cuturi2013}, dont la complexité par itération est $O(n^2)$ contre
+$O(n^3)$ pour la résolution exacte. Ces résultats fondent la quatrième méthode
+implémentée dans ce projet, le pont de Schrödinger.
+
+\section{Données}
+
+La phase d'acquisition et de préparation des données s'est concentrée sur la constitution d'une base consolidée pour un site d'étude défini (Genève). Nos jeux de données intègrent les observations historiques locales, les sorties du modèle global CMIP6 (en période historique et en projection future selon le scénario SSP5-8.5), ainsi que les sorties du modèle régional EURO-CORDEX. Les variables climatiques étudiées sont la température à la surface (\texttt{tas}), les composantes radiatives telles que le rayonnement infrarouge descendant (\texttt{rlds}) et le rayonnement solaire descendant (\texttt{rsds}) et les composantes du vent près de la surface, selon l'axe Est-Ouest (\texttt{uas}), et l'axe Nord-Sud (\texttt{vas}). Afin de calibrer nos modèles de correction avec pertinence, une analyse exploratoire des données historiques (1995-2014) a été réalisée. Le tableau suivant présente les statistiques descriptives de base pour la température (\texttt{tas}) en décembre.
+
+\vspace{0.2cm}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Indicateur Statistique} & \textbf{Observations} & \textbf{CMIP6 (Hist)} & \textbf{EURO-CORDEX} \\
+\midrule
+\textbf{Nombre d'occurrences} & 7305 & 7305 & 4018 \\
+\textbf{Moyenne (°C)} & 11.07 & 7.96 & 7.93 \\
+\textbf{Écart-type} & 7.36 & 7.72 & 8.18 \\
+\textbf{Minimum (°C)} & -9.28 & -21.07 & -14.92 \\
+\textbf{Quantile 5\%} & -0.61 & -3.70 & -3.59 \\
+\textbf{Médiane (°C)} & 11.31 & 7.44 & 6.43 \\
+\textbf{Quantile 75\%} & 17.00 & 14.63 & 14.59 \\
+\textbf{Quantile 95\%} & 22.45 & 19.97 & 22.03 \\
+\textbf{Maximum (°C)} & 28.63 & 25.35 & 26.46 \\
+\bottomrule
+\end{tabular}
+\caption{Statistiques descriptives de la température (\texttt{tas}) en décembre sur la période 1995-2014}
+\label{tab:stats}
+\end{table}
+
+La Figure~\ref{fig:stat1} présente la saisonnalité mensuelle de la température de surface (tas) sur la période 1995-2014. La variabilité, représentée par les zones ombrées entourant les courbes, correspond à l'intervalle de plus ou moins l'écart-type empirique ($\pm 1 \sigma$) autour de la moyenne mensuelle. Cet écart-type rend compte de la dispersion totale des valeurs journalières pour un mois donné sur l'ensemble des 20 années d'étude. On observe un biais froid systématique de CMIP6 par rapport aux observations, ~3°C en hiver et atteignant ~5°C en été. La variabilité du modèle est par ailleurs nettement plus large que celle des observations, ce qui indique que le biais ne se limite pas aux moyennes mais affecte également la dispersion.
+
+\vspace{0.2cm}
+
+La Figure~\ref{fig:stat2} présente les matrices de corrélation entre variables
+climatiques (tas, rlds, rsds, uas, vas) pour janvier et juillet. Les structures
+de dépendance diffèrent entre observations et modèle : en janvier,
+CMIP6 a une corrélation négative forte entre rsds et rlds ($-0.85$) alors
+qu'elle est quasi nulle dans les observations ($-0.01$). En juillet, les signes
+de plusieurs corrélations sont inversés, comme entre tas et rsds ($+0.68$ en
+observations contre $-0.62$ dans le modèle). Ces écarts justifient l'approche
+multivariée du projet : une correction univariée laisserait
+intactes ces structures de dépendance erronées.
+
+\added{
+\textbf{Correction par mois ou groupe de mois.}
+Les structures de dépendance et les biais varient fortement d'une saison à l'autre, comme
+l'illustre la Figure~\ref{fig:stat2}. Afin de tenir compte de cette saisonnalité, la correction
+de biais est appliquée séparément pour chaque mois (ou pour des groupes de mois
+climatiquement homogènes, par exemple les saisons DJF, MAM, JJA, SON). Les distributions
+$F_{X_0}$, $F_{Y_0}$ et $F_{X_1}$ sont donc estimées sur les observations du mois
+correspondant uniquement. Cette stratégie réduit la variance intra-groupe et améliore
+la qualité de la correction, au prix d'un ensemble d'apprentissage plus réduit pour
+chaque mois.
+}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{output.png}
+\caption{Comparaison des distributions}
+\label{fig:stat1}
+\end{figure}
+
+\begin{figure}[H]
+\vspace*{\fill}
+\centering
+\includegraphics[width=0.8\textwidth]{output2.png}
+\caption{Matrices de corrélation : modèles vs observations}
+\label{fig:stat2}
+\vspace*{\fill}
+\end{figure}
+
+\section{Méthodes de correction de biais}
+
+\subsection{CDF-t (Cumulative Distribution Function transform)}
+
+L'objectif de ce projet est d'implémenter et d'évaluer des méthodes de correction
+de biais appliquées aux sorties de modèles climatiques. Ces méthodes reposent sur trois
+entrées : des observations historiques, des valeurs simulées sur cette même période
+historique par un modèle climatique - par exemple le CMIP6 - et des projections futures
+produites par ce même modèle. À partir de ces données, les méthodes estiment et
+corrigent le biais systématique du modèle, et retournent une version corrigée des
+projections futures.
+
+\subsubsection*{Quantile mapping}
+
+Avant de présenter CDF-t, nous introduisons la méthode de \textit{quantile
+mapping}, qui en constitue le point de départ. L'idée est d'établir une
+correspondance entre les quantiles du modèle et ceux des observations sur la période
+historique. Si $F_{X_0}$ désigne la fonction de répartition du modèle sur la période
+historique et $F_{Y_0}$ celle des observations, la correction d'une valeur simulée $x$
+consiste à lui substituer :
+\begin{equation}
+    y = F_{Y_0}^{-1} \circ F_{X_0}(x).
+    \label{eq:qmatching}
+\end{equation}
+Cette transformation ramène la valeur $x$ au quantile correspondant dans la distribution
+observée. Le quantile mapping est simple, non paramétrique, et ne suppose aucune forme
+particulière pour les distributions. Sa limite principale réside cependant dans son
+caractère stationnaire : appliqué à la période future, il corrige les valeurs du modèle
+sur la base de la distribution historique uniquement, sans tenir compte de l'évolution
+de la distribution du modèle elle-même entre la période historique et la période
+future \cite{michelangeli2009}. Autrement dit, si le modèle prédit un déplacement de
+sa distribution vers des valeurs plus élevées, cette information est ignorée.
+
+\subsubsection*{La transformation CDF-t}
+
+La méthode CDF-t, présentée par Michelangeli et al. \cite{michelangeli2009}, étend le quantile mapping en
+intégrant explicitement l'évolution de la distribution simulée. Elle repose sur l'idée
+qu'il existe une transformation $T$ reliant la distribution du modèle à celle des
+observations, et que cette relation reste stable dans le temps.
+
+On adopte les notations suivantes :
+\begin{itemize}
+    \item $X_0$ : variable simulée par le modèle sur la période historique,
+    \item $X_1$ : variable simulée par le modèle sur la période future,
+    \item $Y_0$ : variable observée sur la période historique,
+    \item $Y_1$ : variable observée sur la période future (inconnue, à estimer).
+\end{itemize}
+
+On suppose qu'il existe une transformation $T : [0,1] \to [0,1]$ telle que, sur la
+période historique :
+\begin{equation}
+    F_{Y_0} = T \circ F_{X_0}
+    \label{eq:cdft_hist}
+\end{equation}
+ce qui donne explicitement $T = F_{Y_0} \circ F_{X_0}^{-1}$. L'hypothèse centrale de
+la méthode est que cette relation reste valable à la période future :
+\begin{equation}
+    F_{Y_1} = T \circ F_{X_1} = F_{Y_0} \circ F_{X_0}^{-1} \circ F_{X_1}
+    \label{eq:cdft_future}
+\end{equation}
+La fonction de répartition corrigée $F_{Y_1}$ est donc entièrement déterminée à partir
+des trois distributions connues $F_{X_0}$, $F_{X_1}$ et $F_{Y_0}$.
+
+En pratique, ces trois distributions sont estimées empiriquement à partir des données
+disponibles : $\hat{F}_{X_0}$, $\hat{F}_{X_1}$ et $\hat{F}_{Y_0}$ sont construites
+comme des fonctions de répartition empiriques. À partir d'un échantillon $Z_1, Z_2, ... , Z_n$, on construit la fonction de répartition empirique comme suit :
+\begin{equation*}
+    \hat{F}_{Z} (t) = \frac{1}{n}\sum_{i=1}^{n}{\mathds{1}\{Z_i \leq t\}} \quad \forall t \in \mathbb{R}
+\end{equation*}
+
+La distribution corrigée $\hat{F}_{Y_1}$
+est ensuite obtenue en combinant ces trois estimateurs selon l'équation~\eqref{eq:cdft_future}.
+
+Une fois $F_{Y_1}$ estimée, on peut obtenir des réalisations $Y_1^i$ corrigées par une
+étape de \textit{quantile mapping} : pour chaque valeur simulée future $X_1^i$, on calcule
+\begin{equation}
+    Y_1^i = F_{Y_1}^{-1} \circ F_{X_1}(X_1^i)
+    \label{eq:cdft_qm}
+\end{equation}
+La quantité $F_{X_1}(X_1^i)$ suit une loi uniforme sur $[0,1]$, et appliquer
+$F_{Y_1}^{-1}$ en ces points produit des réalisations distribuées selon $F_{Y_1}$.
+En substituant l'expression~\eqref{eq:cdft_future} dans~\eqref{eq:cdft_qm}, on obtient
+la formule finale :
+\begin{equation}
+    \boxed{Y_1^i = F_{X_1}^{-1} \circ F_{X_0} \circ F_{Y_0}^{-1} \circ F_{X_1}(X_1^i)}
+    \label{eq:cdft_final}
+\end{equation}
+
+\begin{comment}
+\subsubsection*{Gestion des valeurs hors domaine}
+
+Un point technique concerne l'évaluation de la CDF corrigée $\hat{F}_{Y_1}$
+en dehors du support de l'échantillon futur. Rappelons que $\hat{F}_{Y_1}$
+est définie par :
+\begin{equation}
+    \hat{F}_{Y_1}(x) = \hat{F}_{Y_0}\!\left(\hat{F}_{X_0}^{-1}\!\left(
+    \hat{F}_{X_1}(x)\right)\right)
+\end{equation}
+Cette expression est construite à partir de données empiriques, et on
+souhaite l'évaluer comme une fonction continue sur $\mathbb{R}$ afin de
+pouvoir appliquer son inverse $\hat{F}_{Y_1}^{-1}$ à n'importe quelle
+valeur. Or, pour $x < m_f$ (le minimum de l'échantillon futur simulé), la
+CDF empirique vaut $\hat{F}_{X_1}(x) = 0$ par définition, ce qui
+entraîne $\hat{F}_{X_0}^{-1}(0) = m_h$ (le minimum de l'échantillon
+historique simulé), et donc $\hat{F}_{Y_1}(x) = \hat{F}_{Y_0}(m_h)$, une
+constante qui peut différer de $0$. La CDF corrigée ne tend donc pas vers
+$0$ en $-\infty$, et n'est plus une vraie fonction de répartition aux
+extrêmes. Un problème symétrique se pose pour $x > M_f$.
+
+\vspace{0.2cm}
+
+
+Pour traiter ces cas limites, \cite{michelangeli2009} proposent d'appliquer
+une correction constante en dehors de $[m_f, M_f]$ : si le $p$-ième
+percentile futur représente un décalage de $\delta$ par rapport au $p$-ième
+percentile historique, toutes les valeurs en dehors du domaine sont
+corrigées par ce même décalage $\delta$. Cette approche pragmatique évite
+d'extrapoler la correction au-delà des données disponibles, ce qui pourrait
+introduire des valeurs aberrantes.
+
+\vspace{0.2cm}
+
+
+Dans notre implémentation, nous n'avons pas appliqué cette correction : les
+valeurs hors domaine sont traitées par simple extrapolation constante de la
+CDF, sans ajustement supplémentaire. En pratique, cette zone représente une
+proportion très faible des données, et son impact sur les résultats est
+négligeable.
+\end{comment}
+
+\subsubsection*{Limites de CDF-t}
+
+La méthode CDF-t est univariée : appliquée à des données multivariées, elle traite
+chaque variable indépendamment. Cette approche ne préserve pas la structure de
+dépendance entre variables - par exemple, la corrélation entre température et
+précipitation. Par ailleurs, l'hypothèse de
+stationnarité de $T$, bien que largement utilisée dans les méthodes statistiques de
+descente d'échelle, ne peut être garantie.
+
+% -------------------------------------------------------
+\subsection{OTC et dOTC (transport optimal)}
+% -------------------------------------------------------
+
+\subsubsection*{Correction de biais comme loi jointe}
+
+Comme mentionné précédemment, appliquer CDF-t variable par variable ne
+préserve pas la structure de dépendance entre variables. Pour y remédier,
+nous nous sommes tournés vers le transport optimal multivarié, qui permet
+de corriger conjointement toutes les variables tout en préservant leur
+structure de dépendance. Nous avons suivi la méthodologie développée par Robin et al.
+\cite{robin2019}, que nous présentons ici.
+
+\vspace{0.2cm}
+
+
+L'idée clé est la suivante : toute méthode de correction de biais définie par une
+fonction de transfert $T : \mathbb{R}^d \to \mathbb{R}^d$ induit une loi jointe sur
+$\mathbb{R}^d \times \mathbb{R}^d$, dont les marges sont respectivement
+$\mathbb{P}_X$ et $\mathbb{P}_Y$. En notant $\Gamma(\mathbb{P}_X, \mathbb{P}_Y)$
+l'ensemble de toutes les lois jointes admissibles à ces marges, le problème de
+correction de biais revient à choisir un élément $\gamma \in \Gamma(\mathbb{P}_X,
+\mathbb{P}_Y)$. Pour tout $\gamma$, la loi conditionnelle $\gamma_x$ donne la
+distribution de la correction $y$ sachant $X = x$, et les corrections sont tirées
+aléatoirement selon $\gamma_x$ - ce qui confère à la méthode son caractère
+stochastique.
+
+\subsubsection*{OTC : cas stationnaire}
+
+Pour sélectionner le plan de transport optimal parmi tous les éléments de
+$\Gamma(\mathbb{P}_X, \mathbb{P}_Y)$, on minimise le coût quadratique
+suivant :
+\begin{equation}
+    \mathcal{C}(\gamma) = \int_{\mathbb{R}^d \times \mathbb{R}^d}
+    \|\mathbf{x} - \mathbf{y}\|^2 \, \mathrm{d}\gamma(\mathbf{x}, \mathbf{y}).
+    \label{eq:OT_cost}
+\end{equation}
+Ce coût représente l'énergie minimale nécessaire pour transformer la distribution
+$\mathbb{P}_X$ en $\mathbb{P}_Y$, au sens de la distance de Wasserstein-2. On peut
+montrer que dans le cas univarié, le plan minimisant ce coût coïncide précisément avec
+la transformation de quantile mapping, ce qui établit un lien formel entre les deux
+approches.
+
+\vspace{0.2cm}
+
+
+En pratique, les distributions sont estimées par histogrammes multidimensionnels sur
+une grille régulière de cellules $c_i$. On note $p_{X,i}$ (resp. $p_{Y,j}$) le poids
+empirique de $X$ (resp. $Y$) dans la cellule $c_i$ (resp. $c_j$). Le plan de transport
+se réduit alors à une matrice de coefficients $\gamma_{ij}$, représentant la fraction
+de masse transportée de $c_i$ vers $c_j$, soumise aux contraintes de marge:
+\begin{equation}
+    \sum_j \gamma_{ij} = p_{X,i}, \qquad \sum_i \gamma_{ij} = p_{Y,j}.
+    \label{eq:OT_marges}
+\end{equation}
+La minimisation de~\eqref{eq:OT_cost} sous les contraintes~\eqref{eq:OT_marges} est
+un problème de programmation linéaire, résolu par exemple via l'algorithme du simplexe
+sur réseau. La méthode OTC (\textit{Optimal Transport Correction}) désigne la
+correction stationnaire obtenue directement à partir de ce plan : pour chaque
+réalisation $X_l$, on identifie la cellule $c_i$ qui la contient, on tire aléatoirement
+une cellule $c_j$ selon la loi conditionnelle $\hat{\gamma}_{X_l} = (\gamma_{i1},
+\ldots, \gamma_{iJ}) / p_{X,i}$, puis on génère une réalisation $Z_l$ uniformément
+dans $c_j$.
+
+\added{
+\textbf{Complexité algorithmique.}
+La résolution du programme linéaire de transport optimal est en $O(n^3)$ en temps par
+l'algorithme, et en $O(n^2)$ en mémoire pour stocker la matrice
+de coûts. Il est important de noter que le \emph{calcul de la distance de Wasserstein
+comme métrique d'évaluation} présente exactement la même complexité --- mesurer $W_2$
+revient à résoudre un problème de transport optimal. Des alternatives à moindre coût
+sont donc préférables en pratique, notamment la norme de Frobenius entre matrices de
+corrélation de Spearman (utilisée dans ce rapport), qui se calcule en $O(n p^2)$ et
+ne pose aucun problème d'optimisation.
+}
+
+\subsubsection*{dOTC : extension non-stationnaire}
+
+Dans un contexte de changement climatique, les distributions de $X$ et $Y$ évoluent
+dans le temps, et la correction doit en tenir compte. La méthode dOTC
+(\textit{Dynamical OTC}) étend OTC au cas non-stationnaire en s'inspirant de la
+logique de CDF-t : on apprend l'évolution du modèle entre la période historique et la
+période future, et on la transfère au monde des observations.
+
+\vspace{0.2cm}
+
+Soit $\varphi$ le plan de transport optimal entre $\hat{\mathbb{P}}_{X^0}$ et $\hat{\mathbb{P}}_{X^1}$, qui capture l'évolution du modèle entre les deux périodes. Pour chaque observation $Y_l^0$, on identifie la cellule $c_i$ de $\hat{\mathbb{P}}_{X^0}$ dont le centre est le plus proche de $Y_l^0$ au sens de la distance euclidienne. Via le plan $\varphi$ - qui relie $\hat{\mathbb{P}}_{X^0}$ à $\hat{\mathbb{P}}_{X^1}$ - on associe à $c_i$
+une cellule $c_k$ de $\hat{\mathbb{P}}_{X^1}$, définissant le vecteur
+d'évolution locale $\mathbf{v}_{ik} := c_k - c_i$. Ce vecteur capture le
+déplacement que le modèle prédit entre la période historique et la période
+future dans le voisinage de $c_i$. On obtient enfin une réalisation de $Y^1_l$ en déplaçant $Y^0_l$ de $\mathbf{v}_{ik}$, après rescaling par la
+matrice $\mathbf{D}$, selon l'équation :
+\begin{equation}
+    \boxed{Y^1_l = Y^0_l + \mathbf{D} \cdot \mathbf{v}_{ik},}
+    \label{eq:dotc_Y1}
+\end{equation}
+où $\mathbf{D}$ est une matrice de rescaling qui adapte la variabilité de $X^0$ à
+celle de $Y^0$. Deux choix sont possibles : la matrice diagonale des écarts-types
+$\mathbf{D} = \mathrm{diag}(\sigma_{Y^0} \sigma_{X^0}^{-1})$, ou la décomposition
+de Cholesky des matrices de covariance :
+\begin{equation}
+    \mathbf{D} := \mathrm{Cho}(\Sigma_{Y^0}) \cdot \mathrm{Cho}(\Sigma_{X^0})^{-1}.
+    \label{eq:dotc_rescaling}
+\end{equation}
+La décomposition de Cholesky, plus riche, préserve la structure de covariance complète
+entre variables. Elle n'est cependant définie que si $\Sigma$ est symétrique définie
+positive, ce qui peut ne pas être vérifié lorsque les variables sont fortement corrélées
+ou que le nombre de données est faible devant la dimension. Dans ce cas, on revient à
+la matrice diagonale des écarts-types, solution plus robuste bien que moins
+précise.
+
+\vspace{0.2cm}
+
+La première étape de notre implémentation simplifie la méthode dOTC originelle. Au lieu d'identifier la cellule $c_i$ en minimisant la distance euclidienne, cette méthode utilise le plan de transport optimal entre $\hat{\mathbb{P}}_{X^0}$ et $\hat{\mathbb{P}}_{Y^0}$ $\gamma$, qui capture le \textit{biais} du modèle en période historique. $c_i$ est tiré aléatoirement selon la loi conditionnelle de $\gamma$ sachant $Y^0_l$,
+c'est-à-dire selon la distribution $(\gamma_{1l}, \ldots, \gamma_{Il}) / p_{Y^0, l}$. Notre simplification supprime ainsi le caractère stochastique de la correction.
+
+\vspace{0.2cm}
+
+Une fois $Y^1$ estimé par l'équation~\eqref{eq:dotc_Y1}, une dernière correction OTC
+est appliquée entre $X^1$ et $Y^1$ pour produire la sortie corrigée finale $Z^1$.
+Cette étape finale garantit que la distribution de $Z^1$ est cohérente avec
+l'estimation de $Y^1$.
+
+% -------------------------------------------------------
+\subsection{Cas gaussien (transport linéaire)}
+\label{sec:gaussien}
+% -------------------------------------------------------
+
+En parallèle de dOTC, nous avons exploré une formulation analytique du transport
+optimal restreinte au cas gaussien. Dans le cadre général, le calcul du plan de
+transport optimal requiert la résolution d'un problème de programmation linéaire de
+grande taille, dont le coût croît rapidement avec la dimension. Lorsque les
+distributions peuvent être approximées par des lois gaussiennes, le transport optimal
+admet une solution entièrement explicite et linéaire. En se ramenant à un cadre paramétrique, on n'est plus exposé au fléau de la dimension.
+
+\subsubsection*{Distance de Wasserstein entre gaussiennes}
+
+Lorsque les distributions $\mu = \mathcal{N}(a, A)$ et $\nu = \mathcal{N}(b, B)$
+sont gaussiennes, la distance de Wasserstein-2 admet une expression analytique exacte :
+\begin{equation}
+    W_2^2(\mu, \nu) = \|a - b\|^2 + \mathfrak{B}^2(A, B),
+    \label{eq:wasserstein_gauss}
+\end{equation}
+où
+\begin{equation}
+    \mathfrak{B}^2(A, B) \stackrel{\text{déf}}{=} \mathrm{tr}(A) + \mathrm{tr}(B)
+    - 2\,\mathrm{tr}\!\left((A^{1/2} B A^{1/2})^{1/2}\right)
+    \label{eq:bures}
+\end{equation}
+est la métrique de Bures entre matrices semi-définies positives. Le premier terme
+$\|a - b\|^2$ pénalise le déplacement entre les moyennes, tandis que
+$\mathfrak{B}^2(A, B)$ mesure la dissimilarité entre les structures de covariance.
+En particulier, $\mathfrak{B}^2(A, B) = 0$ si et seulement si $A = B$.
+
+\subsubsection*{Plan de transport optimal et carte de Monge}
+
+La solution du problème de Monge dans le cas gaussien est la transformation affine
+suivante \cite{paty2021} :
+\begin{equation}
+    T : x \mapsto b + A^{-1/2}\!\left(A^{1/2} B A^{1/2}\right)^{1/2}\!
+    A^{-1/2}(x - a).
+    \label{eq:monge_gauss}
+\end{equation}
+Cette transformation transporte exactement $\mu$ sur $\nu$ : si
+$X \sim \mathcal{N}(a, A)$, alors $T(X) \sim \mathcal{N}(b, B)$. Elle est l'analogue
+gaussien du quantile mapping univarié, et généralise la normalisation affine classique
+au cadre multivarié. Notons que $T$ est entièrement déterminée par les deux premiers
+moments des distributions, sans avoir besoin de résoudre un problème d'optimisation.
+
+\subsubsection*{Avantages et limites}
+
+Cette approche ne requiert que l'estimation des moyennes et des matrices de covariance
+empiriques, ce qui lui confère une grande stabilité numérique et un coût de calcul très
+faible par rapport à dOTC - en particulier en grande dimension, où la résolution du
+problème de programmation linéaire de dOTC devient coûteuse. Le calcul se réduit à des
+opérations d'algèbre linéaire standard (racines carrées matricielles, décompositions
+de Cholesky), disponibles dans toutes les bibliothèques scientifiques.
+
+\vspace{0.2cm}
+
+
+En contrepartie, la méthode suppose une structure gaussienne qui peut mal représenter
+les distributions réelles de variables climatiques, en particulier les précipitations,
+dont les distributions sont fortement asymétriques et à queue épaisse, ou la vitesse
+du vent, pour laquelle une loi de Weibull est souvent plus adaptée. Elle constitue
+néanmoins une base de référence utile, permettant de quantifier la part d'amélioration
+apportée par les méthodes non paramétriques telles que dOTC.
+
+\added{
+% -------------------------------------------------------
+\subsection{Pont de Schrödinger (transport entropique)}
+\label{sec:schrodinger}
+% -------------------------------------------------------
+
+La méthode dOTC, fondée sur le transport optimal de Monge-Kantorovich, présente deux
+inconvénients pratiques : le plan de transport empirique est \textbf{sparse} (chaque
+point source n'est affecté qu'à un ou très peu de points cibles), ce qui produit des
+corrections discontinues, et sa complexité en $O(n^3)$ le rend coûteux en grande
+dimension. Le \textbf{pont de Schrödinger} \cite{leonard2014} offre une régularisation naturelle de ce problème.
+
+\subsubsection*{Formulation entropique}
+
+On ajoute un terme de régularisation entropique à la fonctionnelle de coût :
+\begin{equation}
+    \pi^\varepsilon = \underset{\pi \in \Pi(\mu_0, \mu_1)}{\arg\min}
+    \underbrace{\int c(\mathbf{x}_0, \mathbf{x}_1) \, \mathrm{d}\pi}_{\text{coût OT}}
+    \;+\; \varepsilon \; \underbrace{\mathrm{KL}\!\left(\pi \,\big\|\, R^\varepsilon\right)}_{\text{prior de diffusion}}
+    \label{eq:sb}
+\end{equation}
+où le \textbf{prior de diffusion brownien} $R^\varepsilon(\mathbf{x}_0, \mathbf{x}_1) \propto
+\exp\bigl(-\|\mathbf{x}_0 - \mathbf{x}_1\|^2 / 2\varepsilon\bigr)$ est le noyau d'un
+mouvement brownien reliant $\mathbf{x}_0$ à $\mathbf{x}_1$ en temps $\varepsilon$,
+et $\varepsilon > 0$ est le paramètre de régularisation. La divergence de Kullback-Leibler
+$\mathrm{KL}(\pi \| R^\varepsilon)$ pénalise les couplages qui s'éloignent trop du prior
+brownien. Lorsque $\varepsilon \to 0$, la solution converge vers le plan de transport
+optimal classique de dOTC.
+
+\subsubsection*{Algorithme de Sinkhorn}
+
+La solution de \eqref{eq:sb} admet la forme tensorisée
+\begin{equation}
+    T^\varepsilon_{ij} = u_i \cdot K_{ij} \cdot v_j,
+    \qquad K_{ij} = \exp\!\left(-\frac{C_{ij}}{\varepsilon}\right),
+\end{equation}
+où les \textbf{potentiels duaux} $u \in \mathbb{R}^{n_0}$ et $v \in \mathbb{R}^{n_1}$ sont
+calculés par l'algorithme de Sinkhorn--Knopp, dont chaque itération est :
+\begin{equation}
+    u^{(t+1)} = \frac{a}{K v^{(t)}}, \qquad v^{(t+1)} = \frac{b}{K^\top u^{(t+1)}}.
+\end{equation}
+La complexité par itération est $O(n^2)$, nettement plus favorable que le $O(n^3)$ de
+la résolution exacte du programme linéaire.
+
+\subsubsection*{Projection barycentrique douce}
+
+Le plan $T^\varepsilon$ étant dense (toutes les entrées sont strictement positives), on
+utilise une \textbf{projection barycentrique} plutôt qu'une affectation dure. Pour chaque
+observation $Y_0^k$, on identifie son plus proche voisin $i^*(k) = \arg\min_i
+\|Y_0^k - X_0^i\|$ dans $X_0$, puis on calcule une moyenne pondérée des points cibles :
+\begin{equation}
+    \boxed{Y_1^k = \frac{\displaystyle\sum_{j} T^\varepsilon_{i^*(k),\, j} \cdot X_1^j}
+    {\displaystyle\sum_{j} T^\varepsilon_{i^*(k),\, j}}}
+    \label{eq:sb_bary}
+\end{equation}
+Cette formule est l'analogue continu de l'affectation dure de dOTC. La régularisation
+$\varepsilon$ contrôle le degré de lissage : à $\varepsilon$ grand, la correction tend
+vers la moyenne globale de $X_1$ (couplage indépendant) ; à $\varepsilon$ petit, elle
+se rapproche de dOTC.
+
+\subsubsection*{Avantages et limites}
+
+Par rapport à dOTC, le pont de Schrödinger offre une correction plus lisse et plus
+stable numériquement, en particulier en grande dimension ou avec peu de données. En
+revanche, le choix du paramètre $\varepsilon$ introduit un hyperparamètre supplémentaire
+à calibrer. Dans notre implémentation, les variables sont normalisées ($z$-score) avant
+le calcul du transport afin que des variables d'échelles différentes (tas en °C, rsds
+en W/m²) contribuent équitablement au coût.
+}
+
+\section{Résultats}
+
+\modifie{On évalue la qualité de la correction de biais multivariée des quatre méthodes --- CDF-t, dOTC,
+transport optimal linéaire gaussien, et pont de Schrödinger --- par rapport au modèle brut, selon trois expériences de validation croisée.
+Les résultats du pont de Schrödinger sont présentés de manière préliminaire dans la Section~\ref{sec:sb_results}.}
+La première repose sur des simulations : on estime des lois gaussiennes sur les modèles CMIP6 passé et futur ($X_0$ et $X_1$) et sur les observations passées et futures ($Y_0$ et $Y_1$), on tire des échantillons de ces lois, et on évalue la correction sur ces 
+échantillons simulés.
+La deuxième est une validation croisée entre le modèle global CMIP6 et des observations réelles.
+La troisième est une validation croisée entre le modèle global CMIP5 et le modèle régional 
+Eurocordex. On fait varier à chaque fois la dimension de $p = 1$ à $p = 5$ en ajoutant successivement les variables 
+\texttt{tas}, \texttt{rlds}, \texttt{rsds}, \texttt{uas} et \texttt{vas}.
+
+\vspace{0.2cm}
+
+Pour chaque expérience, on compare les lois marginales et la structure de dépendance entre 
+variables des données corrigées et des observations.
+Les lois marginales sont comparées via la différence en valeur absolue des espérances, 
+le rapport des variances, et la p-valeur du test de Kolmogorov-Smirnov.
+Ce test mesure l'écart entre deux fonctions de répartition empiriques ; une p-valeur élevée 
+indique que les deux échantillons sont compatibles avec la même loi, tandis qu'une p-valeur 
+faible conduit à rejeter cette hypothèse.
+La structure de dépendance est comparée via la norme de Frobenius de la différence des matrices 
+de corrélation de Spearman.
+La corrélation de Spearman entre deux variables $U$ et $V$ est le coefficient de corrélation 
+linéaire de Pearson appliqué aux rangs de $U$ et de $V$, soit
+\[
+\rho_S(U, V) = \frac{\text{Cov}(\text{rg}(U), \text{rg}(V))}
+{\sigma_{\text{rg}(U)}\, \sigma_{\text{rg}(V)}}.
+\]
+Elle mesure la dépendance monotone entre deux variables sans supposer de linéarité.
+Pour deux matrices $A$ et $B$ de taille $p \times p$, la distance de Frobenius est définie par
+\[
+\|A - B\|_F = \sqrt{\sum_{i=1}^{p}\sum_{j=1}^{p} (a_{ij} - b_{ij})^2},
+\]
+et quantifie ici l'écart global entre les structures de dépendance de la correction et 
+des observations.
+Plus cette distance est faible, plus les corrélations entre variables sont proches de celles 
+des observations, ce qui indique que la méthode préserve bien la structure de dépendance 
+multivariée.
+On dispose ainsi, pour chaque méthode et chaque expérience, d'un ensemble de critères couvrant 
+à la fois le comportement marginal de chaque variable et leurs interactions. Les résultats sur les lois marginales sont en annexe tandis que ceux sur les structures de dépendance sont inclus dans les sous parties.
+
+\subsection{Validation croisée sur simulations (cas gaussien)}
+
+On évalue d'abord les méthodes sur des données simulées selon des lois gaussiennes.
+L'intérêt de ce cadre est de tester si le transport linéaire gaussien corrige mieux que les 
+autres méthodes lorsque les données vérifient exactement l'hypothèse gaussienne : dans ce cas, 
+le transport optimal admet une forme analytique affine explicite, et le transport linéaire est 
+la seule méthode conçue pour en approcher la solution.
+Les paramètres des lois gaussiennes (espérance et matrice de covariance) sont estimés 
+empiriquement sur CMIP6 et les observations pour la période historique (1975--1994) et la 
+période future (1995--2014). On tire ensuite des échantillons de taille $n = 2000$.
+
+\paragraph{Lois marginales.}
+En dimension 1, toutes les méthodes réduisent la différence d'espérance par rapport au modèle 
+brut (1.96°C) : dOTC obtient la meilleure correction (0.29°C), devant CDF-t (0.36°C) et le 
+transport linéaire (0.73°C).
+Les p-valeurs du test de Kolmogorov-Smirnov restent faibles pour toutes les méthodes ; dOTC 
+obtient la p-valeur la plus élevée ($5.4 \times 10^{-5}$), ce qui correspond au moindre rejet 
+de l'hypothèse d'égalité des distributions.
+En dimension supérieure, les résultats sont hétérogènes selon les variables.
+Sur \texttt{tas}, CDF-t et dOTC sont les plus efficaces (erreurs de l'ordre de 0.5--0.9°C
+selon la dimension), le transport linéaire est légèrement en retrait (1.0--1.2°C), et le 
+modèle brut est le moins bon (1.7--2.0°C).
+Sur \texttt{rlds}, dOTC est la moins mauvaise méthode (3.6--4.0°C), tandis que CDF-t 
+dégrade l'espérance par rapport au modèle brut, atteignant jusqu'à 7.0°Cen dimension 5 
+contre 2.4°Cpour le modèle brut ; le transport linéaire est intermédiaire (5.2--5.7°C). Sur \texttt{rsds}, les trois méthodes améliorent largement le modèle brut (4.8--5.1°C), 
+CDF-t étant la plus précise (0.04--0.27°Cselon la dimension).
+Sur \texttt{uas} et \texttt{vas}, dOTC est la meilleure méthode (0.02--0.13°C) et les trois 
+méthodes corrigent efficacement le modèle brut.
+
+
+Dans l'ensemble, dOTC est la méthode la plus régulièrement performante sur les marginales, 
+mais la hiérarchie entre méthodes varie selon la variable considérée, ce qui empêche de 
+conclure à une dominance claire d'une méthode sur les autres.
+
+\paragraph{Structure de dépendance.}
+CDF-t applique une transformation croissante variable par variable, ce qui préserve la copule 
+du modèle : sa norme de Frobenius est donc par construction identique à celle du modèle brut, 
+quelle que soit la dimension.
+Les méthodes de transport optimal (dOTC et transport linéaire) modifient en revanche la 
+structure de dépendance.
+En dimensions 2 et 3, ce comportement est défavorable : le modèle brut présente une structure 
+de dépendance plus proche de celle des observations (normes 0.132 et 0.376) que dOTC 
+(0.374 et 0.390) et le transport linéaire (0.310 et 0.434), ce qui n'est pas attendu dans ce 
+cadre gaussien.
+En dimensions 4 et 5 en revanche, les méthodes multivariées deviennent nettement meilleures : 
+dOTC (0.500 et 0.523) et le transport linéaire (0.532 et 0.548) réduisent substantiellement 
+la norme par rapport au modèle brut (0.736 et 1.694), tandis que CDF-t reste à leur niveau 
+(0.736 et 1.694).
+Le transport optimal améliore donc la structure de dépendance à partir de la dimension 4, 
+mais pas en basse dimension dans ce cadre simulé.
+
+\begin{longtable}{lrrrrr}
+\caption{Simulations -- Norme de Frobenius de la différence des matrices de corrélation 
+de Spearman, par dimension et méthode.}
+\label{tab:simul_frobenius} \\
+\toprule
+Méthode & $p=1$ & $p=2$ & $p=3$ & $p=4$ & $p=5$ \\
+\midrule
+\endfirsthead
+\multicolumn{6}{c}{\tablename~\thetable{} -- suite} \\
+\toprule
+Méthode & $p=1$ & $p=2$ & $p=3$ & $p=4$ & $p=5$ \\
+\midrule
+\endhead
+\midrule
+\multicolumn{6}{r}{suite page suivante} \\
+\endfoot
+\bottomrule
+\endlastfoot
+Modèle non corrigé  & 0.000 & 0.146 & 0.378 & 0.738 & 1.633 \\
+CDF-t               & 0.000 & 0.147 & 0.378 & 0.736 & 1.633 \\
+dOTC                & 0.000 & 0.333 & 0.372 & 0.430 & 0.709 \\
+Transport linéaire  & 0.000 & 0.282 & 0.418 & 0.496 & 0.609 \\
+\end{longtable}
+
+\subsection{Validation croisée modèle global contre observations}
+
+\subsubsection{Lecture graphique des résultats (CDF-t et tas) }
+
+Après avoir évalué les méthodes sur des simulations, on procède à une validation croisée entre le modèle global CMIP6 et des observations réelles. Nous présentons dans cette sous-section une visualisation graphique de la correction sur ces données réelles, en prenant l'exemple de la méthode CDF-t appliquée à la variable tas (température en surface). La Figure~\ref{fig:stat3} illustre cette correction pour les mois de décembre et juin, sur la période de validation 
+(1995--2014).
+
+\vspace{0.2cm}
+
+En décembre, le modèle brut présente un biais froid marqué : sa distribution est centrée 
+autour de $0\,^{\circ}$C alors que les observations le sont autour de $4\text{--}5\,^{\circ}$C.
+Après correction, la distribution corrigée se recentre vers $1\text{--}2\,^{\circ}$C, ce qui 
+réduit le biais de moyenne, mais reste décalée par rapport aux observations.
+On observe également un pic artificiel autour de $9\,^{\circ}$C dans la distribution corrigée, 
+absent des observations, ce qui traduit un mauvais ajustement des valeurs élevées.
+
+\vspace{0.2cm}
+
+En juin, le biais du modèle brut est plus important : la distribution du modèle est centrée 
+autour de $15\text{--}16\,^{\circ}$C, contre $20\text{--}21\,^{\circ}$C pour les observations,
+soit un écart d'environ $5\,^{\circ}$C.
+Après correction, la distribution corrigée se recentre autour de $17\,^{\circ}$C, ce qui 
+réduit le biais mais ne le supprime pas entièrement.
+La forme générale de la distribution est mieux reproduite qu'en décembre, mais la queue droite 
+reste sous-estimée.
+
+\vspace{0.2cm}
+
+Dans les deux cas, CDF-t corrige partiellement le biais de moyenne et recalibre la variance, 
+mais ajuste imparfaitement les queues de distribution. 
+
+
+\begin{figure}[H]
+    \centering
+    % Ligne 1 : Décembre
+    \begin{minipage}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{12brut.png} % Remplace par ton nom de fichier
+        
+        \vspace{0.1cm}
+        {\small (a) Décembre : Modèle vs Observations}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{12corr.png} % Remplace par ton nom de fichier
+        
+        \vspace{0.1cm}
+        {\small (b) Décembre : Correction CDF-t}
+    \end{minipage}
+    
+    \vspace{0.6cm} % Espace vertical entre les deux lignes
+    
+    % Ligne 2 : Juillet
+    \begin{minipage}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{6brut.png} % Remplace par ton nom de fichier
+        
+        \vspace{0.1cm}
+        {\small (c) Juillet : Modèle vs Observations}
+    \end{minipage}
+    \hfill
+    \begin{minipage}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{6corr.png} % Remplace par ton nom de fichier
+        
+        \vspace{0.1cm}
+        {\small (d) Juillet : Correction CDF-t}
+    \end{minipage}
+    
+    \caption{Comparaison des densités empiriques de la température de surface (\texttt{tas}) avant et après application de la méthode univariée CDF-t, pour les mois de décembre et juillet sur la période de validation.}
+    \label{fig:stat3}
+\end{figure}
+
+\subsubsection{\'Evaluation quantitative }
+
+Nous reproduisons le même type d'analyse quantitative que dans le cas gaussien.
+
+\paragraph{Lois marginales.}
+En dimension 1, le modèle brut présente un biais de moyenne de 1.86°Csur \texttt{tas}.
+CDF-t et dOTC le réduisent de manière comparable (0.61°Cet 0.56°Crespectivement), tandis 
+que le transport linéaire est moins précis (0.95°C).
+dOTC obtient la p-valeur KS la plus élevée ($3.3 \times 10^{-3}$), soit le moindre rejet de 
+l'hypothèse d'égalité des distributions.
+En dimension supérieure, les résultats sont cohérents avec ceux obtenus sur données simulées.
+Sur \texttt{tas}, CDF-t et dOTC restent les plus précis (0.61--0.75°C), devant le transport 
+linéaire (0.95°C).
+Sur \texttt{rlds}, CDF-t dégrade à nouveau l'espérance par rapport au modèle brut (6.7°C
+contre 2.8°C), dOTC et le transport linéaire sont intermédiaires (4.5--5.3°C).
+Sur \texttt{rsds}, CDF-t est la plus précise (0.22°C), dOTC et le transport linéaire sont 
+proches (0.35--0.39°C), contre 4.9°Cpour le modèle brut.
+Sur \texttt{uas}, le transport linéaire est le plus précis (0.26°C), devant CDF-t (0.36°C) 
+et dOTC (0.44--0.59°C).
+Sur \texttt{vas}, les trois méthodes corrigent très efficacement le biais de moyenne, CDF-t 
+étant quasi-parfaite (0.006°C).
+Comme sur données simulées, aucune méthode ne domine les autres sur l'ensemble des variables.
+
+\paragraph{Structure de dépendance.}
+CDF-t conserve par construction la copule du modèle : sa norme de Frobenius est identique à 
+celle du modèle brut quelle que soit la dimension (0.166, 0.332, 0.841, 1.813 en dimensions 
+2 à 5).
+En dimensions 2 et 3, les méthodes de transport optimal dégradent la structure de dépendance 
+par rapport au modèle brut, comme observé sur données simulées : dOTC obtient 0.356 et 0.420, 
+le transport linéaire 0.299 et 0.533, contre 0.165 et 0.333 pour le modèle brut.
+À partir de la dimension 4, les méthodes multivariées deviennent nettement meilleures : en 
+dimension 5, le transport linéaire obtient la norme la plus faible (0.584), devant dOTC 
+(0.762), tandis que le modèle brut et CDF-t atteignent 1.814.
+Sur données réelles, le transport linéaire surpasse dOTC en dimension 4 et 5 sur ce critère,
+contrairement au cadre simulé où les deux méthodes étaient comparables.
+Cela s'explique par la nature du modèle : le transport linéaire n'estime qu'un nombre 
+restreint de paramètres (une matrice de transformation affine), ce qui lui confère une faible 
+variance d'estimation.
+En grande dimension, dOTC estime une map de transport plus complexe sur le même volume de 
+données, ce qui induit une variance plus élevée et dégrade la qualité de la correction sur 
+la structure de dépendance.
+
+\begin{longtable}{lrrrrr}
+\caption{CMIP6 vs observations -- Norme de Frobenius de la différence des matrices de 
+corrélation de Spearman, par dimension et méthode.}
+\label{tab:cmip6_frobenius} \\
+\toprule
+Méthode & $p=1$ & $p=2$ & $p=3$ & $p=4$ & $p=5$ \\
+\midrule
+\endfirsthead
+\multicolumn{6}{c}{\tablename~\thetable{} -- suite} \\
+\toprule
+Méthode & $p=1$ & $p=2$ & $p=3$ & $p=4$ & $p=5$ \\
+\midrule
+\endhead
+\midrule
+\multicolumn{6}{r}{suite page suivante} \\
+\endfoot
+\bottomrule
+\endlastfoot
+Modèle non corrigé  & 0.000 & 0.165 & 0.333 & 0.838 & 1.814 \\
+CDF-t               & 0.000 & 0.166 & 0.332 & 0.841 & 1.813 \\
+dOTC                & 0.000 & 0.356 & 0.420 & 0.661 & 0.762 \\
+Transport linéaire  & 0.000 & 0.299 & 0.533 & 0.619 & 0.584 \\
+\end{longtable}
+
+\nouveau{
+\begin{sidewaysfigure}[p]
+\centering
+\includegraphics[width=\textheight]{scatter_bivariate.png}
+\caption{%
+    Nuages de points bivariés \texttt{tas} $\times$ \texttt{rlds} avant et après correction
+    (janvier, validation croisée CMIP6 vs observations). Chaque panneau représente un jeu de
+    données : observations historiques $Y_0$ ($\rho_S = 0.716$), CMIP6 brut $X_0$, CDF-t
+    ($\rho_S = 0.743$), dOTC ($\rho_S = 0.603$) et pont de Schrödinger
+    ($\rho_S = 0.699$). CDF-t préserve la structure de dépendance du modèle par construction ;
+    dOTC la modifie davantage, parfois de façon défavorable en basse dimension ;
+    le pont de Schrödinger produit un résultat intermédiaire, plus lisse que dOTC
+    grâce à la projection barycentrique douce.
+}
+\label{fig:scatter_biv}
+\end{sidewaysfigure}
+}
+
+\subsection{Validation croisée modèle global contre modèle régional}
+
+On conduit la même analyse en remplaçant les observations par le modèle régional Eurocordex 
+comme référence, et CMIP5 comme modèle global à corriger, sur la même décomposition 
+temporelle.
+On ajoute ici une sixième variable, \texttt{huss}, portant la dimension maximale à $p = 6$.
+
+\paragraph{Lois marginales.}
+En dimension 1, le modèle brut présente un biais de moyenne modéré sur \texttt{tas} (0.43°C),
+nettement inférieur à celui observé dans les expériences précédentes.
+Le transport linéaire obtient la meilleure correction (0.06°C) et la p-valeur KS la plus 
+élevée (0.448), soit le moindre rejet de l'hypothèse d'égalité des distributions ; CDF-t 
+et dOTC sont proches (0.15°Cet 0.10 K, p-valeurs 0.152 et 0.344).
+En dimension supérieure, le transport linéaire est la méthode la plus régulièrement 
+performante sur l'ensemble des variables.
+Sur \texttt{tas}, il maintient un biais quasi-nul (0.06°C) quelle que soit la dimension,
+devant CDF-t (0.15°C) et dOTC (0.03--0.24°Cselon la dimension).
+Sur \texttt{rlds}, le modèle brut présente un biais important (14.76°C) ; le transport 
+linéaire le réduit le plus efficacement (3.40°C), devant CDF-t (5.88°C) et dOTC (3.62--9.14°C).
+Sur \texttt{rsds}, le biais du modèle brut est très élevé (17.47°C) ; le transport linéaire 
+est à nouveau le plus précis (0.15°C), devant CDF-t (0.79°C) et dOTC (2.73--4.24°C).
+Sur \texttt{huss}, les méthodes corrigent bien le biais (0.06--0.17°Ccontre 0.35°Cpour 
+le modèle brut), CDF-t étant la plus précise (0.06°C).
+Sur \texttt{uas} et \texttt{vas}, le transport linéaire et dOTC sont comparables et 
+corrigent efficacement le modèle brut.
+
+\paragraph{Structure de dépendance.}
+CDF-t conserve par construction la copule du modèle, sa norme de Frobenius est donc 
+identique à celle du modèle brut quelle que soit la dimension.
+Dans cette expérience, le transport linéaire domine nettement les autres méthodes sur 
+l'ensemble des dimensions.
+Dès la dimension 2, il obtient une norme quasi-nulle (0.002), contre 0.171 pour le modèle 
+brut et CDF-t, et 0.127 pour dOTC.
+Cette tendance se confirme en dimensions 3 à 6 : le transport linéaire obtient 
+systématiquement la norme la plus faible (0.161, 0.168, 0.395, 0.377), devant dOTC 
+(0.283, 0.238, 0.786, 0.536) et loin devant le modèle brut et CDF-t (jusqu'à 1.798 en 
+dimension 6). Ce résultat contraste avec les deux expériences précédentes, où l'avantage du transport 
+linéaire n'apparaissait qu'à partir de la dimension 4.
+
+\begin{longtable}{lrrrrrr}
+\caption{CMIP5 vs Eurocordex -- Norme de Frobenius de la différence des matrices de 
+corrélation de Spearman, par dimension et méthode.}
+\label{tab:cmip5_frobenius} \\
+\toprule
+Méthode & $p=1$ & $p=2$ & $p=3$ & $p=4$ & $p=5$ & $p=6$ \\
+\midrule
+\endfirsthead
+\multicolumn{7}{c}{\tablename~\thetable{} -- suite} \\
+\toprule
+Méthode & $p=1$ & $p=2$ & $p=3$ & $p=4$ & $p=5$ & $p=6$ \\
+\midrule
+\endhead
+\midrule
+\multicolumn{7}{r}{suite page suivante} \\
+\endfoot
+\bottomrule
+\endlastfoot
+Modèle non corrigé  & 0.000 & 0.171 & 0.219 & 0.291 & 0.824 & 1.798 \\
+CDF-t               & 0.000 & 0.171 & 0.223 & 0.296 & 0.823 & 1.797 \\
+dOTC                & 0.000 & 0.127 & 0.283 & 0.238 & 0.786 & 0.536 \\
+Transport linéaire  & 0.000 & 0.002 & 0.161 & 0.168 & 0.395 & 0.377 \\
+\end{longtable}
+
+\added{
+\begin{sidewaysfigure}[p]
+\centering
+\includegraphics[width=\textheight]{frobenius_comparison.png}
+\caption{%
+    Norme de Frobenius de la différence des matrices de corrélation de Spearman
+    $\|R_{\hat{Y}_1} - R_{Y_0}\|_F$ en fonction de la dimension $p$, pour les trois
+    expériences de validation croisée.
+    Une valeur faible indique que la méthode préserve mieux la structure de dépendance
+    inter-variable des observations.
+    \textbf{Lecture :} le transport optimal (dOTC et linéaire) ne bénéficie pas d'un
+    avantage sur CDF-t en basse dimension ($p \leq 3$), mais domine nettement à partir
+    de $p = 4$. L'avantage du transport linéaire est particulièrement marqué dans
+    l'expérience CMIP5/EURO-CORDEX (panneau droit), où les données sont proches du cas
+    gaussien.
+}
+\label{fig:frobenius}
+\end{sidewaysfigure}
+}
+
+\nouveau{
+\begin{sidewaysfigure}[p]
+\centering
+\includegraphics[width=\textheight]{heatmap_frobenius.png}
+\caption{%
+    Vue synthétique des normes de Frobenius pour les trois expériences. Chaque cellule
+    indique la norme $\|R_{\hat{Y}_1} - R_{Y_0}\|_F$ ; le symbole $\star$ marque le
+    meilleur résultat par colonne (dimension). L'intensité de couleur croît avec la valeur
+    (rouge foncé = mauvais). Les cases à $p=1$ sont triviales (valeur nulle pour toutes
+    les méthodes). Le gradient de couleur permet de visualiser d'un coup d'œil le seuil
+    dimensionnel à partir duquel les méthodes multivariées surpassent CDF-t.
+}
+\label{fig:heatmap}
+\end{sidewaysfigure}
+}
+
+\subsection{Interprétation des erreurs}
+
+Deux sources d'erreur peuvent expliquer les mauvaises performances du transport optimal sur certaines dimensions dans la validation croisée sur simulations et celle entre le modèle CMIP6 et les observations. 
+La première est une erreur de stationnarité : la méthode suppose que le plan de transport
+qui relie $X_0$ à $X_1$ est la même que celle qui relie $Y_0$ à $Y_1$,
+ce qui peut ne pas être vérifié si le biais du modèle évolue entre passé et futur.
+On se place dans le cas gaussien, où le transport optimal est une application affine
+$T : x \mapsto Ax + b$, entièrement déterminée par les moments d'ordre 1 et 2 des
+distributions.
+Pour quantifier cette erreur de stationnarité, on estime les maps $T_X : X_0 \to X_1$
+et $T_Y : Y_0 \to Y_1$ séparément à partir des données, et on compare leurs deux
+composantes : la partie linéaire via $\|A_X - A_Y\|_F$, et la partie translation via
+$\|b_X - b_Y\|_2$.
+
+\vspace{0.2cm}
+
+Pour la correction de CMIP6 sur les observations en dimension 5, on obtient $\|A_X\|_F = 2.129$ et
+$\|A_Y\|_F = 2.236$, ce qui indique que le modèle et les observations produisent des
+déformations d'amplitude similaire entre passé et futur.
+L'écart $\|A_X - A_Y\|_F = 0.351$ représente environ 16\% de ces normes : la map $T_X$
+constitue une approximation raisonnable de $T_Y$ sur la partie linéaire. Sur la partie translation, on obtient $\|b_X\| = 0.277$ et $\|b_Y\| = 0.120$. L'écart $\|b_X - b_Y\|_2 = 0.377$ représente environ le double de la moyenne des normes. Le modèle ne reproduit
+pas fidèlement l'évolution en moyenne des observations entre passé et futur.
+En décomposant par variable, cet écart est porté principalement par \texttt{tas}
+(0.288) et \texttt{rlds} (0.215), puis \texttt{uas} (0.108) dans une moindre mesure ;
+\texttt{rsds} (0.028) et \texttt{vas} (0.017) contribuent peu.
+
+\vspace{0.2cm}
+
+L'hypothèse de stationnarité est donc approximativement vérifiée sur la partie linéaire,
+mais moins bien sur la correction de moyenne, notamment pour \texttt{tas} et
+\texttt{rlds} : le modèle ne capte pas correctement l'évolution en moyenne de ces
+variables, ce qui introduit un biais résiduel dans la correction après application de
+$T_X$ à $Y_0$.
+
+\vspace{0.2cm}
+
+La seconde source d'erreur est une erreur statistique d'apprentissage : le plan de transport est estimé sur un échantillon fini,
+ce qui introduit une variance d'estimation.
+Pour l'isoler, on construit un cadre d'expérience où le plan de transport entre passé et futur est le même pour le modèle et pour les observations. On réalise ainsi une validation croisée sur des gaussiennes simulées en remplaçant les observations futures par la sortie de la correction de biais par transport linéaire. Formellement,
+\begin{equation*}
+   (X_0, X_1, Y_0, Y_1) = (X_0^G, X_1^G, Y_0^G, G(Y_0^G))
+\end{equation*}
+où $Z^G$ est une gaussienne simulée d'espérance $\mu = \mathbb{E}[Z]$ et de variance $\Sigma = \operatorname{Var}(Z)$, et $G$ le transport optimal (linéaire ici) entre  $X_0^G$ et $X_1^G$. On réalise 600 simulations car l'échantillon d'apprentissage dans l'expérience CMIP6 contre observations compte 600 observations. 
+
+Dans ce cadre, l'hypothèse de stationnarité est vérifiée par construction. Les erreurs de la méthode dOTC peuvent être interprétées comme de l'erreur statistique d'estimation.
+
+\vspace{0.2cm}
+
+Les résultats sont présentés dans le tableau ~\ref{tab:erreur_stat_frobenius}. Les résultats de la méthode dOTC dans la validation croisée CMIP6 contre observations sont rappelés en première ligne. L'erreur d'estimation est
+faible pour les dimensions 1 et 2 mais plus élevée pour les dimensions 3 à 5. En dimension 5, elle représente presque la moitié de la distance de Frobenius obtenue dans la validation croisée CMIP6 sur observations. En dimension supérieure à deux, l'erreur statistique d'estimation n'est donc pas négligeable.
+
+\added{
+La Figure~\ref{fig:error_decomp} illustre cette décomposition de manière visuelle. Le
+panneau gauche représente la décomposition absolue ($\|R\|_F$ totale = erreur de
+stationnarité + erreur statistique), tandis que le panneau droit montre les parts
+relatives de chaque source. En dimension 3, l'erreur statistique représente déjà 36\%
+de l'erreur totale, et environ 47\% en dimension 5. Cela confirme que l'estimation du
+plan de transport sur l'échantillon historique (600 observations) souffre d'une variance
+croissante avec la dimension, et que l'augmentation du volume de données d'apprentissage
+ou l'utilisation d'une méthode régularisée (telle que le pont de Schrödinger,
+Section~\ref{sec:schrodinger}) pourrait réduire cette composante.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{error_decomposition.png}
+\caption{%
+    Décomposition de l'erreur de correction dOTC pour l'expérience CMIP6 vs observations,
+    en erreur de stationnarité et erreur statistique d'estimation.
+    \textbf{Gauche :} valeurs absolues de Frobenius pour chaque composante, avec le total
+    observé en pointillés.
+    \textbf{Droite :} part relative (en \%) de chaque source d'erreur. À partir de
+    $p = 3$, l'erreur statistique représente une fraction non négligeable (36--47\%)
+    de l'erreur totale.
+}
+\label{fig:error_decomp}
+\end{figure}
+}
+
+\begin{longtable}{lrrrrr}
+\caption{Norme de Frobenius de la différence des 
+matrices de corrélation de Spearman, par dimension et par expérience, pour la méthode dOTC}
+\label{tab:erreur_stat_frobenius} \\
+\toprule
+Expérience & $p=1$ & $p=2$ & $p=3$ & $p=4$ & $p=5$ \\
+\midrule
+\endfirsthead
+\multicolumn{6}{c}{\tablename~\thetable{} -- suite} \\
+\endfoot
+\bottomrule
+\endlastfoot
+CMIP6 - observations              & 0.000 & 0.36 &  0.42 & 0.66 & 0.76 \\
+Cadre stationnaire              & 0.000 & 0.024 &  0.15 & 0.27 & 0.36 \\
+\end{longtable}
+
+\nouveau{
+% -------------------------------------------------------
+\subsection{Résultats préliminaires : pont de Schrödinger}
+\label{sec:sb_results}
+% -------------------------------------------------------
+
+Le pont de Schrödinger (Section~\ref{sec:schrodinger}) a été implémenté et testé sur les
+données réelles CMIP6 vs observations pour le mois de janvier, en dimension 2
+(\texttt{tas} $\times$ \texttt{rlds}). Les variables sont standardisées ($z$-score) avant
+le calcul du transport, et le paramètre de régularisation est fixé à $\varepsilon = 0.5$.
+
+\vspace{0.2cm}
+
+La Figure~\ref{fig:scatter_biv} montre les nuages de points bivariés correspondants.
+La corrélation de Spearman mesurée dans les observations est $\rho_S(Y_0) = 0.716$ ;
+le pont de Schrödinger obtient $\rho_S = 0.699$, ce qui est nettement meilleur que
+dOTC ($\rho_S = 0.603$) et légèrement inférieur à CDF-t ($\rho_S = 0.743$).
+Ces résultats sont cohérents avec l'interprétation théorique : la projection barycentrique
+douce produit un couplage plus régulier que l'affectation dure de dOTC, au prix d'un léger
+biais vers la moyenne globale.
+
+\vspace{0.2cm}
+
+Ces résultats restent préliminaires : une évaluation exhaustive sur l'ensemble des
+dimensions ($p = 1, \ldots, 5$), des mois et des expériences de validation croisée
+constitue la suite naturelle du projet. La sensibilité au paramètre $\varepsilon$
+(Table~\ref{tab:sb_params}) méritera également d'être explorée. En particulier, la
+question du choix optimal de $\varepsilon$ --- par validation croisée ou par
+critère d'information --- est ouverte.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcc}
+\toprule
+$\varepsilon$ & Comportement limite & Attendu en pratique \\
+\midrule
+$\varepsilon \to 0$ & Plan de transport exact (dOTC) & Affectation dure, discontinuités \\
+$\varepsilon = 0.5$ & Régularisation modérée & Lissage partiel, utilisé ici \\
+$\varepsilon \to \infty$ & Couplage indépendant & Correction = moyenne de $X_1$ \\
+\bottomrule
+\end{tabular}
+\caption{Interprétation du paramètre de régularisation $\varepsilon$ du pont de Schrödinger.}
+\label{tab:sb_params}
+\end{table}
+}
+
+\newpage
+
+\section*{Conclusion}
+\addcontentsline{toc}{section}{Conclusion}
+
+La correction de biais des modèles climatiques constitue un enjeu central pour la
+fiabilité des projections utilisées dans les études d'impact. Ce projet, réalisé en collaboration avec EDF, s'est inscrit dans ce cadre en
+étudiant et comparant \modifie{quatre} méthodes de correction de biais multivariée appliquées
+aux sorties de modèles climatiques globaux. Dans un cadre multivarié, corriger
+chaque variable marginalement ne suffit pas : il faut également préserver les
+structures de dépendance entre variables.
+
+\vspace{0.3cm}
+
+\modifie{Les quatre méthodes étudiées sont CDF-t --- méthode actuellement utilisée par
+EDF ---, un transport optimal dynamique (dOTC), un transport optimal linéaire
+lorsque les variables sont gaussiennes, et le pont de Schrödinger (régularisation
+entropique de dOTC via l'algorithme de Sinkhorn, Section~\ref{sec:schrodinger}).
+Ce dernier constitue une piste d'amélioration directe de dOTC, offrant des corrections
+plus lisses et une complexité réduite à $O(n^2)$ par itération ; des résultats
+préliminaires en dimension 2 sont présentés à la Section~\ref{sec:sb_results}.} Le cadre expérimental repose sur quatre jeux de données $(X_0, Y_0,
+X_1, Y_1)$, où $X$ désigne les simulations et $Y$ les observations, l'indice $0$
+correspondant à la période d'apprentissage et l'indice $1$ à la période de
+projection.
+
+\vspace{0.3cm}
+
+Les résultats obtenus sont contrastés. Sur les deux premières expériences, les deux
+méthodes de transport optimal sont moins performantes que CDF-t en faible
+dimension ; à partir de la dimension $4$, le transport optimal via dOTC
+devient la meilleure méthode. Sur la troisième expérience, en revanche, le transport
+optimal linéaire domine nettement les deux autres méthodes sur l'ensemble des
+dimensions considérées. Cet avantage s'explique en partie par la nature de
+l'estimation : le transport linéaire ne requiert que l'estimation d'une transformation
+affine, soit un nombre restreint de paramètres, ce qui lui confère une faible variance
+d'estimation et le rend moins sensible à la taille de l'échantillon disponible.
+Aucune méthode ne domine donc uniformément les autres. \added{La visualisation des
+normes de Frobenius en fonction de la dimension (Figure~\ref{fig:frobenius}) permet
+d'identifier clairement le seuil $p = 4$ au-delà duquel les méthodes multivariées
+dépassent CDF-t, et la décomposition de l'erreur (Figure~\ref{fig:error_decomp}) précise
+les sources de sous-performance en basse dimension.}
+
+\vspace{0.3cm}
+
+La décomposition de l'erreur totale permet d'interpréter ces résultats. L'erreur de
+stationnarité traduit la violation de l'hypothèse selon laquelle le transport $T_X$,
+appris entre les distributions simulées passée et future, constitue une bonne
+approximation du transport $T_Y$ entre les distributions observées correspondantes.
+Dans le cas gaussien, cette erreur se décompose en une partie linéaire $\|A_X - A_Y\|_F$
+et une partie translation $\|b_X - b_Y\|_2$ : l'analyse montre que la partie
+linéaire est approximativement vérifiée, mais que la partie translation l'est
+nettement moins, notamment pour \texttt{tas} et \texttt{rlds}. L'erreur statistique,
+quant à elle, provient de l'estimation du transport sur un échantillon historique de
+taille finie - 600 observations dans notre cadre expérimental - et est quantifiée
+dans un cadre stationnaire où l'hypothèse de stationnarité est vérifiée par
+construction. Elle s'avère non négligeable à partir de la dimension $3$, où elle
+représente jusqu'à la moitié de l'erreur totale observée, mais reste inférieure à
+l'erreur de stationnarité.
+
+\newpage
+
+\addcontentsline{toc}{section}{Références}
+\nocite{*}
+\bibliographystyle{plain}
+\bibliography{biblio}
+
+\newpage
+
+\appendix
+\section*{Annexes}
+\addcontentsline{toc}{section}{Annexes}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% EXPÉRIENCE 1 : Simulations (n = 600)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{longtable}{lllrrr}
+\caption{Simulations -- Statistiques marginales par dimension, variable et méthode.}
+\label{tab:simul_marginales} \\
+\toprule
+$p$ & Variable & Méthode & Diff. esp. & Rapp. var. & KS $p$-val. \\
+\midrule
+\endfirsthead
+\multicolumn{6}{c}{\tablename~\thetable{} -- suite} \\
+\toprule
+$p$ & Variable & Méthode & Diff. esp. & Rapp. var. & KS $p$-val. \\
+\midrule
+\endhead
+\midrule
+\multicolumn{6}{r}{suite page suivante} \\
+\endfoot
+\bottomrule
+\endlastfoot
+\multirow{4}{*}{1} & \multirow{4}{*}{tas}
+ & Modèle non corrigé & 1.516 & 1.295 & $1.03\times10^{-9}$  \\
+ & & CDF-t              & 1.024 & 2.069 & $4.36\times10^{-11}$ \\
+ & & dOTC               & 0.918 & 1.785 & $1.91\times10^{-11}$ \\
+ & & Transport linéaire & 1.375 & 1.740 & $8.27\times10^{-12}$ \\
+\midrule
+\multirow{8}{*}{2} & \multirow{4}{*}{tas}
+ & Modèle non corrigé & 2.001 & 1.115 & $1.48\times10^{-12}$ \\
+ & & CDF-t              & 0.930 & 2.012 & $1.46\times10^{-10}$ \\
+ & & dOTC               & 0.972 & 1.456 & $1.05\times10^{-6}$  \\
+ & & Transport linéaire & 1.306 & 1.631 & $6.55\times10^{-11}$ \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rlds}
+ & Modèle non corrigé & 1.383 & 0.538 & $6.02\times10^{-3}$  \\
+ & & CDF-t              & 8.305 & 1.205 & $3.17\times10^{-9}$  \\
+ & & dOTC               & 4.962 & 1.137 & $1.74\times10^{-3}$  \\
+ & & Transport linéaire & 6.558 & 1.117 & $5.95\times10^{-5}$  \\
+\midrule
+\multirow{12}{*}{3} & \multirow{4}{*}{tas}
+ & Modèle non corrigé & 1.748 & 1.121 & $6.13\times10^{-15}$ \\
+ & & CDF-t              & 0.816 & 1.650 & $2.64\times10^{-6}$  \\
+ & & dOTC               & 1.074 & 1.175 & $1.94\times10^{-6}$  \\
+ & & Transport linéaire & 1.099 & 1.471 & $1.36\times10^{-8}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rlds}
+ & Modèle non corrigé & 3.984 & 0.566 & $7.74\times10^{-5}$  \\
+ & & CDF-t              & 7.487 & 1.124 & $1.93\times10^{-8}$  \\
+ & & dOTC               & 5.831 & 1.042 & $8.58\times10^{-6}$  \\
+ & & Transport linéaire & 6.273 & 1.166 & $7.74\times10^{-5}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rsds}
+ & Modèle non corrigé & 4.978 & 0.363 & $1.02\times10^{-13}$ \\
+ & & CDF-t              & 0.569 & 0.777 & $1.55\times10^{-2}$  \\
+ & & dOTC               & 0.091 & 0.721 & $1.58\times10^{-1}$  \\
+ & & Transport linéaire & 0.007 & 0.762 & $1.39\times10^{-1}$  \\
+\midrule
+\multirow{16}{*}{4} & \multirow{4}{*}{tas}
+ & Modèle non corrigé & 2.054 & 1.034 & $1.59\times10^{-14}$ \\
+ & & CDF-t              & 0.803 & 1.425 & $1.52\times10^{-5}$  \\
+ & & dOTC               & 0.860 & 1.217 & $2.65\times10^{-5}$  \\
+ & & Transport linéaire & 1.075 & 1.420 & $7.73\times10^{-8}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rlds}
+ & Modèle non corrigé & 3.050 & 0.570 & $7.74\times10^{-5}$  \\
+ & & CDF-t              & 6.183 & 1.439 & $2.93\times10^{-7}$  \\
+ & & dOTC               & 5.134 & 1.079 & $4.03\times10^{-3}$  \\
+ & & Transport linéaire & 4.509 & 1.278 & $8.91\times10^{-4}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rsds}
+ & Modèle non corrigé & 4.461 & 0.395 & $6.55\times10^{-11}$ \\
+ & & CDF-t              & 1.032 & 1.018 & $1.39\times10^{-1}$  \\
+ & & dOTC               & 1.470 & 0.839 & $1.58\times10^{-1}$  \\
+ & & Transport linéaire & 1.520 & 0.965 & $6.84\times10^{-2}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{uas}
+ & Modèle non corrigé & 1.012 & 2.116 & $3.14\times10^{-18}$ \\
+ & & CDF-t              & 0.383 & 0.969 & $1.85\times10^{-2}$  \\
+ & & dOTC               & 0.470 & 0.835 & $2.15\times10^{-3}$  \\
+ & & Transport linéaire & 0.458 & 0.965 & $2.20\times10^{-2}$  \\
+\midrule
+\multirow{20}{*}{5} & \multirow{4}{*}{tas}
+ & Modèle non corrigé & 1.961 & 0.947 & $2.10\times10^{-19}$ \\
+ & & CDF-t              & 0.507 & 1.406 & $2.74\times10^{-4}$  \\
+ & & dOTC               & 0.494 & 1.236 & $3.65\times10^{-2}$  \\
+ & & Transport linéaire & 0.897 & 1.379 & $5.95\times10^{-5}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rlds}
+ & Modèle non corrigé & 2.309 & 0.541 & $6.02\times10^{-3}$  \\
+ & & CDF-t              & 5.295 & 1.368 & $3.48\times10^{-5}$  \\
+ & & dOTC               & 2.872 & 1.089 & $1.06\times10^{-1}$  \\
+ & & Transport linéaire & 4.798 & 1.259 & $4.43\times10^{-4}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rsds}
+ & Modèle non corrigé & 5.321 & 0.379 & $1.26\times10^{-11}$ \\
+ & & CDF-t              & 0.248 & 0.940 & $2.30\times10^{-1}$  \\
+ & & dOTC               & 0.129 & 0.707 & $5.88\times10^{-2}$  \\
+ & & Transport linéaire & 0.238 & 0.834 & $1.06\times10^{-1}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{uas}
+ & Modèle non corrigé & 0.947 & 2.072 & $3.68\times10^{-23}$ \\
+ & & CDF-t              & 0.486 & 0.934 & $5.61\times10^{-4}$  \\
+ & & dOTC               & 0.296 & 0.725 & $1.12\times10^{-3}$  \\
+ & & Transport linéaire & 0.478 & 0.783 & $7.74\times10^{-5}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{vas}
+ & Modèle non corrigé & 1.034 & 0.790 & $8.79\times10^{-16}$ \\
+ & & CDF-t              & 0.047 & 1.242 & $4.29\times10^{-2}$  \\
+ & & dOTC               & 0.086 & 1.081 & $4.42\times10^{-1}$  \\
+ & & Transport linéaire & 0.060 & 1.181 & $4.00\times10^{-1}$  \\
+\end{longtable}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% EXPÉRIENCE 2 : CMIP6 vs Observations
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{longtable}{lllrrr}
+\caption{CMIP6 vs observations -- Statistiques marginales par dimension, variable et méthode.}
+\label{tab:cmip6_marginales} \\
+\toprule
+$p$ & Variable & Méthode & Diff. esp. & Rapp. var. & KS $p$-val. \\
+\midrule
+\endfirsthead
+\multicolumn{6}{c}{\tablename~\thetable{} -- suite} \\
+\toprule
+$p$ & Variable & Méthode & Diff. esp. & Rapp. var. & KS $p$-val. \\
+\midrule
+\endhead
+\midrule
+\multicolumn{6}{r}{suite page suivante} \\
+\endfoot
+\bottomrule
+\endlastfoot
+\multirow{4}{*}{1} & \multirow{4}{*}{tas}
+ & Modèle non corrigé & 1.857 & 1.105 & $6.66\times10^{-13}$ \\
+ & & CDF-t              & 0.613 & 1.510 & $2.26\times10^{-4}$  \\
+ & & dOTC               & 0.564 & 1.200 & $3.30\times10^{-3}$  \\
+ & & Transport linéaire & 0.953 & 1.674 & $5.04\times10^{-8}$  \\
+\midrule
+\multirow{8}{*}{2} & \multirow{4}{*}{tas}
+ & Modèle non corrigé & 1.857 & 1.105 & $6.66\times10^{-13}$ \\
+ & & CDF-t              & 0.613 & 1.510 & $2.26\times10^{-4}$  \\
+ & & dOTC               & 0.755 & 1.132 & $9.16\times10^{-4}$  \\
+ & & Transport linéaire & 0.953 & 1.635 & $1.57\times10^{-7}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rlds}
+ & Modèle non corrigé & 2.781 & 0.558 & $2.58\times10^{-7}$  \\
+ & & CDF-t              & 6.705 & 1.434 & $1.42\times10^{-9}$  \\
+ & & dOTC               & 4.994 & 1.112 & $8.34\times10^{-5}$  \\
+ & & Transport linéaire & 4.787 & 1.208 & $2.10\times10^{-3}$  \\
+\midrule
+\multirow{12}{*}{3} & \multirow{4}{*}{tas}
+ & Modèle non corrigé & 1.857 & 1.105 & $6.66\times10^{-13}$ \\
+ & & CDF-t              & 0.613 & 1.510 & $2.26\times10^{-4}$  \\
+ & & dOTC               & 0.671 & 1.184 & $2.88\times10^{-4}$  \\
+ & & Transport linéaire & 0.953 & 1.570 & $2.15\times10^{-7}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rlds}
+ & Modèle non corrigé & 2.781 & 0.558 & $2.58\times10^{-7}$  \\
+ & & CDF-t              & 6.705 & 1.434 & $1.42\times10^{-9}$  \\
+ & & dOTC               & 4.524 & 1.009 & $1.76\times10^{-3}$  \\
+ & & Transport linéaire & 4.787 & 1.235 & $3.89\times10^{-3}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rsds}
+ & Modèle non corrigé & 4.910 & 0.372 & $4.48\times10^{-48}$ \\
+ & & CDF-t              & 0.221 & 0.726 & $2.22\times10^{-5}$  \\
+ & & dOTC               & 0.353 & 0.680 & $1.68\times10^{-6}$  \\
+ & & Transport linéaire & 0.389 & 0.791 & $1.97\times10^{-4}$  \\
+\midrule
+\multirow{16}{*}{4} & \multirow{4}{*}{tas}
+ & Modèle non corrigé & 1.857 & 1.105 & $6.66\times10^{-13}$ \\
+ & & CDF-t              & 0.613 & 1.510 & $2.26\times10^{-4}$  \\
+ & & dOTC               & 0.749 & 1.062 & $7.31\times10^{-4}$  \\
+ & & Transport linéaire & 0.953 & 1.628 & $4.42\times10^{-7}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rlds}
+ & Modèle non corrigé & 2.781 & 0.558 & $2.58\times10^{-7}$  \\
+ & & CDF-t              & 6.705 & 1.434 & $1.42\times10^{-9}$  \\
+ & & dOTC               & 4.928 & 0.957 & $1.52\times10^{-2}$  \\
+ & & Transport linéaire & 4.787 & 1.232 & $4.65\times10^{-3}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rsds}
+ & Modèle non corrigé & 4.910 & 0.372 & $4.48\times10^{-48}$ \\
+ & & CDF-t              & 0.221 & 0.726 & $2.22\times10^{-5}$  \\
+ & & dOTC               & 0.368 & 0.723 & $4.09\times10^{-6}$  \\
+ & & Transport linéaire & 0.389 & 0.815 & $1.04\times10^{-1}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{uas}
+ & Modèle non corrigé & 0.908 & 2.333 & $6.63\times10^{-16}$ \\
+ & & CDF-t              & 0.356 & 1.385 & $4.93\times10^{-3}$  \\
+ & & dOTC               & 0.442 & 0.947 & $7.26\times10^{-3}$  \\
+ & & Transport linéaire & 0.257 & 0.950 & $1.44\times10^{-1}$  \\
+\midrule
+\multirow{20}{*}{5} & \multirow{4}{*}{tas}
+ & Modèle non corrigé & 1.857 & 1.105 & $6.66\times10^{-13}$ \\
+ & & CDF-t              & 0.613 & 1.510 & $2.26\times10^{-4}$  \\
+ & & dOTC               & 0.712 & 1.276 & $1.38\times10^{-4}$  \\
+ & & Transport linéaire & 0.953 & 1.643 & $3.33\times10^{-7}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rlds}
+ & Modèle non corrigé & 2.781 & 0.558 & $2.58\times10^{-7}$  \\
+ & & CDF-t              & 6.705 & 1.434 & $1.42\times10^{-9}$  \\
+ & & dOTC               & 5.258 & 1.025 & $8.34\times10^{-5}$  \\
+ & & Transport linéaire & 4.787 & 1.243 & $4.59\times10^{-3}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rsds}
+ & Modèle non corrigé & 4.910 & 0.372 & $4.48\times10^{-48}$ \\
+ & & CDF-t              & 0.221 & 0.726 & $2.22\times10^{-5}$  \\
+ & & dOTC               & 1.053 & 0.733 & $6.68\times10^{-7}$  \\
+ & & Transport linéaire & 0.389 & 0.825 & $2.11\times10^{-1}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{uas}
+ & Modèle non corrigé & 0.908 & 2.333 & $6.63\times10^{-16}$ \\
+ & & CDF-t              & 0.356 & 1.385 & $4.93\times10^{-3}$  \\
+ & & dOTC               & 0.587 & 0.991 & $1.44\times10^{-10}$ \\
+ & & Transport linéaire & 0.257 & 0.924 & $1.50\times10^{-1}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{vas}
+ & Modèle non corrigé & 1.096 & 0.811 & $1.59\times10^{-32}$ \\
+ & & CDF-t              & 0.006 & 1.512 & $1.95\times10^{-1}$  \\
+ & & dOTC               & 0.019 & 1.023 & $1.01\times10^{-1}$  \\
+ & & Transport linéaire & 0.028 & 1.288 & $7.20\times10^{-1}$  \\
+\end{longtable}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% EXPÉRIENCE 3 : CMIP5 vs Eurocordex
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+\begin{longtable}{lllrrr}
+\caption{CMIP5 vs Eurocordex -- Statistiques marginales par dimension, variable et méthode.}
+\label{tab:cmip5_marginales} \\
+\toprule
+$p$ & Variable & Méthode & Diff. esp. & Rapp. var. & KS $p$-val. \\
+\midrule
+\endfirsthead
+\multicolumn{6}{c}{\tablename~\thetable{} -- suite} \\
+\toprule
+$p$ & Variable & Méthode & Diff. esp. & Rapp. var. & KS $p$-val. \\
+\midrule
+\endhead
+\midrule
+\multicolumn{6}{r}{suite page suivante} \\
+\endfoot
+\bottomrule
+\endlastfoot
+\multirow{4}{*}{1} & \multirow{4}{*}{tas}
+ & Modèle non corrigé & 0.434  & 1.264 & $1.27\times10^{-2}$  \\
+ & & CDF-t              & 0.147  & 1.225 & $1.51\times10^{-1}$  \\
+ & & dOTC               & 0.101  & 1.144 & $3.44\times10^{-1}$  \\
+ & & Transport linéaire & 0.063  & 1.191 & $4.48\times10^{-1}$  \\
+\midrule
+\multirow{8}{*}{2} & \multirow{4}{*}{tas}
+ & Modèle non corrigé & 0.434  & 1.264 & $1.27\times10^{-2}$  \\
+ & & CDF-t              & 0.147  & 1.225 & $1.51\times10^{-1}$  \\
+ & & dOTC               & 0.188  & 1.094 & $5.99\times10^{-1}$  \\
+ & & Transport linéaire & 0.063  & 1.182 & $5.20\times10^{-1}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rlds}
+ & Modèle non corrigé & 14.760 & 1.688 & $1.14\times10^{-20}$ \\
+ & & CDF-t              & 5.880  & 1.430 & $8.55\times10^{-12}$ \\
+ & & dOTC               & 7.855  & 1.294 & $3.13\times10^{-10}$ \\
+ & & Transport linéaire & 3.404  & 1.529 & $6.72\times10^{-2}$  \\
+\midrule
+\multirow{12}{*}{3} & \multirow{4}{*}{tas}
+ & Modèle non corrigé & 0.434  & 1.264 & $1.27\times10^{-2}$  \\
+ & & CDF-t              & 0.147  & 1.225 & $1.51\times10^{-1}$  \\
+ & & dOTC               & 0.029  & 0.984 & $2.77\times10^{-1}$  \\
+ & & Transport linéaire & 0.063  & 1.190 & $4.83\times10^{-1}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rlds}
+ & Modèle non corrigé & 14.760 & 1.688 & $1.14\times10^{-20}$ \\
+ & & CDF-t              & 5.880  & 1.430 & $8.55\times10^{-12}$ \\
+ & & dOTC               & 9.138  & 1.196 & $8.55\times10^{-12}$ \\
+ & & Transport linéaire & 3.404  & 1.485 & $6.72\times10^{-2}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rsds}
+ & Modèle non corrigé & 17.474 & 1.949 & $1.12\times10^{-37}$ \\
+ & & CDF-t              & 0.792  & 1.152 & $1.87\times10^{-7}$  \\
+ & & dOTC               & 4.133  & 1.423 & $2.92\times10^{-5}$  \\
+ & & Transport linéaire & 0.146  & 1.687 & $3.80\times10^{-4}$  \\
+\midrule
+\multirow{16}{*}{4} & \multirow{4}{*}{tas}
+ & Modèle non corrigé & 0.434  & 1.264 & $1.27\times10^{-2}$  \\
+ & & CDF-t              & 0.147  & 1.225 & $1.51\times10^{-1}$  \\
+ & & dOTC               & 0.055  & 1.047 & $4.21\times10^{-1}$  \\
+ & & Transport linéaire & 0.063  & 1.203 & $5.20\times10^{-1}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rlds}
+ & Modèle non corrigé & 14.760 & 1.688 & $1.14\times10^{-20}$ \\
+ & & CDF-t              & 5.880  & 1.430 & $8.55\times10^{-12}$ \\
+ & & dOTC               & 8.037  & 1.305 & $6.72\times10^{-10}$ \\
+ & & Transport linéaire & 3.404  & 1.486 & $9.57\times10^{-2}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rsds}
+ & Modèle non corrigé & 17.474 & 1.949 & $1.12\times10^{-37}$ \\
+ & & CDF-t              & 0.792  & 1.152 & $1.87\times10^{-7}$  \\
+ & & dOTC               & 3.305  & 1.420 & $8.34\times10^{-5}$  \\
+ & & Transport linéaire & 0.146  & 1.703 & $4.60\times10^{-4}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{huss}
+ & Modèle non corrigé & 0.352  & 1.156 & $1.38\times10^{-4}$  \\
+ & & CDF-t              & 0.063  & 1.044 & $1.01\times10^{-1}$  \\
+ & & dOTC               & 0.152  & 0.975 & $5.99\times10^{-3}$  \\
+ & & Transport linéaire & 0.174  & 1.029 & $2.78\times10^{-3}$  \\
+\midrule
+\multirow{20}{*}{5} & \multirow{4}{*}{tas}
+ & Modèle non corrigé & 0.434  & 1.264 & $1.27\times10^{-2}$  \\
+ & & CDF-t              & 0.147  & 1.225 & $1.51\times10^{-1}$  \\
+ & & dOTC               & 0.240  & 1.061 & $3.09\times10^{-1}$  \\
+ & & Transport linéaire & 0.063  & 1.214 & $4.83\times10^{-1}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rlds}
+ & Modèle non corrigé & 14.760 & 1.688 & $1.14\times10^{-20}$ \\
+ & & CDF-t              & 5.880  & 1.430 & $8.55\times10^{-12}$ \\
+ & & dOTC               & 3.625  & 1.267 & $1.81\times10^{-2}$  \\
+ & & Transport linéaire & 3.404  & 1.483 & $8.53\times10^{-2}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rsds}
+ & Modèle non corrigé & 17.474 & 1.949 & $1.12\times10^{-37}$ \\
+ & & CDF-t              & 0.792  & 1.152 & $1.87\times10^{-7}$  \\
+ & & dOTC               & 2.734  & 1.541 & $1.24\times10^{-6}$  \\
+ & & Transport linéaire & 0.146  & 1.678 & $3.13\times10^{-4}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{huss}
+ & Modèle non corrigé & 0.352  & 1.156 & $1.38\times10^{-4}$  \\
+ & & CDF-t              & 0.063  & 1.044 & $1.01\times10^{-1}$  \\
+ & & dOTC               & 0.014  & 1.048 & $7.88\times10^{-1}$  \\
+ & & Transport linéaire & 0.174  & 1.041 & $3.28\times10^{-3}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{uas}
+ & Modèle non corrigé & 1.829  & 3.044 & $5.68\times10^{-63}$ \\
+ & & CDF-t              & 0.345  & 1.175 & $3.65\times10^{-4}$  \\
+ & & dOTC               & 0.116  & 0.767 & $1.33\times10^{-1}$  \\
+ & & Transport linéaire & 0.126  & 0.794 & $9.57\times10^{-2}$  \\
+\midrule
+\multirow{24}{*}{6} & \multirow{4}{*}{tas}
+ & Modèle non corrigé & 0.434  & 1.264 & $1.27\times10^{-2}$  \\
+ & & CDF-t              & 0.147  & 1.225 & $1.51\times10^{-1}$  \\
+ & & dOTC               & 0.193  & 0.899 & $4.21\times10^{-1}$  \\
+ & & Transport linéaire & 0.063  & 1.218 & $4.83\times10^{-1}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rlds}
+ & Modèle non corrigé & 14.760 & 1.688 & $1.14\times10^{-20}$ \\
+ & & CDF-t              & 5.880  & 1.430 & $8.55\times10^{-12}$ \\
+ & & dOTC               & 6.072  & 1.257 & $9.16\times10^{-4}$  \\
+ & & Transport linéaire & 3.404  & 1.475 & $8.53\times10^{-2}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{rsds}
+ & Modèle non corrigé & 17.474 & 1.949 & $1.12\times10^{-37}$ \\
+ & & CDF-t              & 0.792  & 1.152 & $1.87\times10^{-7}$  \\
+ & & dOTC               & 4.236  & 1.588 & $2.13\times10^{-10}$ \\
+ & & Transport linéaire & 0.146  & 1.630 & $6.70\times10^{-4}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{huss}
+ & Modèle non corrigé & 0.352  & 1.156 & $1.38\times10^{-4}$  \\
+ & & CDF-t              & 0.063  & 1.044 & $1.01\times10^{-1}$  \\
+ & & dOTC               & 0.089  & 0.934 & $2.55\times10^{-2}$  \\
+ & & Transport linéaire & 0.174  & 1.043 & $3.87\times10^{-3}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{uas}
+ & Modèle non corrigé & 1.829  & 3.044 & $5.68\times10^{-63}$ \\
+ & & CDF-t              & 0.345  & 1.175 & $3.65\times10^{-4}$  \\
+ & & dOTC               & 0.150  & 0.689 & $5.99\times10^{-3}$  \\
+ & & Transport linéaire & 0.126  & 0.811 & $8.53\times10^{-2}$  \\
+\cmidrule{2-6}
+ & \multirow{4}{*}{vas}
+ & Modèle non corrigé & 1.115  & 1.559 & $7.23\times10^{-15}$ \\
+ & & CDF-t              & 0.291  & 0.907 & $7.63\times10^{-2}$  \\
+ & & dOTC               & 0.286  & 0.777 & $8.77\times10^{-3}$  \\
+ & & Transport linéaire & 0.026  & 0.822 & $5.96\times10^{-1}$  \\
+\end{longtable}
+
+
+
+\end{document}
